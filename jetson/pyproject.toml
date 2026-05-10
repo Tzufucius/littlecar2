@@ -5,13 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "littlecar2-jetson"
 version = "0.1.0"
-description = "Jetson side vision and STM32 communication package for littlecar2."
+description = "Jetson side vision package for littlecar2."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
   "numpy>=1.23",
   "opencv-python>=4.8",
-  "pyserial>=3.5",
   "ultralytics>=8.0"
 ]
 

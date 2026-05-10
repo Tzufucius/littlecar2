@@ -1,1 +1,1 @@
-"""Domain enums and events."""
+"""Vision domain events."""

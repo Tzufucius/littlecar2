@@ -4,12 +4,14 @@ import sys
 import cv2
 import numpy as np
 
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from vision.qr_detector import QRDetector
 
-IMAGE_PATH = Path("assets/同色.png")
+
+IMAGE_PATH = PROJECT_ROOT / "assets" / "同色.png"
 
 
 def read_image(path: Path):
@@ -26,7 +28,7 @@ def main() -> None:
 
     result = QRDetector().detect_raw(frame)
     if result is None:
-        print("未识别到二维码")
+        print("未识别到二维码。")
         return
 
     print("识别成功")
