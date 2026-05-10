@@ -422,6 +422,11 @@
               <FilePath>../Core/Src/jetson_debug.c</FilePath>
             </File>
             <File>
+              <FileName>host_rx.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/host_rx.c</FilePath>
+            </File>
+            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/main.c</FilePath>

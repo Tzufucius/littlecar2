@@ -35,6 +35,8 @@ virtualFolder:
                 - path: ../Core/Inc/wit_imu.h
                 - path: ../Core/Inc/jetson_debug.h
                 - path: ../Core/Src/jetson_debug.c
+                - path: ../Core/Inc/host_rx.h
+                - path: ../Core/Src/host_rx.c
                 - path: ../Core/Inc/ops_sensor.h
                 - path: ../Core/Src/ops_sensor.c
                 - path: ../Core/Inc/Emm_V5.h

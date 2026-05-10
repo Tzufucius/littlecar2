@@ -28,7 +28,7 @@
 #include "Emm_V5.h"
 #include "zdt_stepper.h"
 #include "chassis_motion.h"
-#include "jetson_debug.h"
+#include "host_rx.h"
 
 /* USER CODE END Includes */
 
@@ -197,9 +197,14 @@ int main(void)
   OPS_Init(&huart5);
   WIT_Init();
 
-  if (JetsonDebug_Init(&huart6) != JETSON_DEBUG_STATUS_OK)
+  if (HostRx_InitPc(&huart1) != HOST_RX_STATUS_OK)
   {
-    printf("JetsonDebug init failed\r\n");
+    printf("HostRx PC init failed\r\n");
+  }
+
+  if (HostRx_InitJetson(&huart6) != HOST_RX_STATUS_OK)
+  {
+    printf("HostRx Jetson init failed\r\n");
   }
 
   printf("USART1 printf ready\r\n");
@@ -221,7 +226,7 @@ int main(void)
     // BusServo_Poll();
     OPS_Poll();
     WIT_Poll();
-    JetsonDebug_Poll();
+    HostRx_Poll();
     situation_led();
 
     // if ((HAL_GetTick() - g_wit_print_tick) >= 1000U)
@@ -585,6 +590,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
   {
     OPS_OnByteReceived();
   }
+
+  if (huart->Instance == USART1)
+  {
+    HostRx_OnPcByteReceived(huart);
+  }
 }
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
@@ -596,7 +606,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 
   if (huart->Instance == USART6)
   {
-    JetsonDebug_OnUartRxEvent(huart, Size);
+    HostRx_OnJetsonUartRxEvent(huart, Size);
   }
 }
 
@@ -619,7 +629,12 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 
   if (huart->Instance == USART6)
   {
-    JetsonDebug_OnUartError(huart);
+    HostRx_OnUartError(huart);
+  }
+
+  if (huart->Instance == USART1)
+  {
+    HostRx_OnUartError(huart);
   }
 }
 
