@@ -1,0 +1,18 @@
+vision:
+  yolo:
+    model_path: models/RGB_circle.pt
+    conf_thres: 0.5
+    iou_thres: 0.45
+    device: cuda:0
+  qr:
+    change_filter: true
+  camera:
+    index: 0
+    width: 640
+    height: 480
+
+comm:
+  serial:
+    port: /dev/ttyTHS1
+    baudrate: 115200
+    timeout: 0.1
