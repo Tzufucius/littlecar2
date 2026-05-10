@@ -4,7 +4,7 @@ from typing import Optional
 import cv2
 import numpy as np
 
-from littlecar2.vision.types import QRResult
+from vision.types import QRResult
 
 
 class QRDetector:

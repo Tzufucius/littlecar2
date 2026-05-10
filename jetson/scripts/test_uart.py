@@ -1,9 +1,9 @@
 import argparse
 
-from littlecar2.comm.mock_client import MockStm32Client
-from littlecar2.comm.protocol import Frame
-from littlecar2.comm.serial_client import SerialConfig, SerialStm32Client
-from littlecar2.domain.enums import CmdSet, MsgType
+from comm.mock_client import MockStm32Client
+from comm.protocol import Frame
+from comm.serial_client import SerialConfig, SerialStm32Client
+from domain.enums import CmdSet, MsgType
 
 
 def main() -> None:

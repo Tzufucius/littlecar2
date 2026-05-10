@@ -4,12 +4,12 @@ from typing import Any, Dict, Optional, Union
 
 import yaml
 
-from littlecar2.comm.interface import Stm32Client
-from littlecar2.comm.mock_client import MockStm32Client
-from littlecar2.domain.events import VisionEvent
-from littlecar2.vision.camera import CameraConfig, OpenCVCamera
-from littlecar2.vision.qr_detector import QRChangeFilter, QRDetector
-from littlecar2.vision.vision_service import VisionService
+from comm.interface import Stm32Client
+from comm.mock_client import MockStm32Client
+from domain.events import VisionEvent
+from vision.camera import CameraConfig, OpenCVCamera
+from vision.qr_detector import QRChangeFilter, QRDetector
+from vision.vision_service import VisionService
 
 
 def load_config(path: Union[str, Path]) -> Dict[str, Any]:
@@ -19,7 +19,7 @@ def load_config(path: Union[str, Path]) -> Dict[str, Any]:
 
 
 def build_vision_service(config: Dict[str, Any], project_root: Path) -> VisionService:
-    from littlecar2.vision.yolo_detector import YoloDetector
+    from vision.yolo_detector import YoloDetector
 
     vision_config = config.get("vision", {})
     yolo_config = vision_config.get("yolo", {})
@@ -57,7 +57,7 @@ def build_stm32_client(config: Dict[str, Any], use_mock: bool = False) -> Stm32C
     if use_mock:
         return MockStm32Client()
 
-    from littlecar2.comm.serial_client import SerialConfig, SerialStm32Client
+    from comm.serial_client import SerialConfig, SerialStm32Client
 
     serial_config = config.get("comm", {}).get("serial", {})
     return SerialStm32Client(

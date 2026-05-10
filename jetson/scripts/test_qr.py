@@ -3,7 +3,7 @@ from pathlib import Path
 
 import cv2
 
-from littlecar2.vision.qr_detector import QRDetector
+from vision.qr_detector import QRDetector
 
 
 def main() -> None:

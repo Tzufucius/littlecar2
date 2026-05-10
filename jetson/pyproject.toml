@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-littlecar2 = "littlecar2.app.main:main"
+littlecar2 = "app.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 
-from littlecar2.app.robot_main import build_camera, build_robot_main, load_config
+from app.robot_main import build_camera, build_robot_main, load_config
 
 
 def main() -> None:

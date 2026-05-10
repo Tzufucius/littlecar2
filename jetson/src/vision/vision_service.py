@@ -4,9 +4,9 @@ from typing import Optional, Union
 import cv2
 import numpy as np
 
-from littlecar2.vision.qr_detector import QRChangeFilter, QRDetector
-from littlecar2.vision.types import VisionResult
-from littlecar2.vision.yolo_detector import YoloDetector
+from vision.qr_detector import QRChangeFilter, QRDetector
+from vision.types import VisionResult
+from vision.yolo_detector import YoloDetector
 
 
 class VisionService:

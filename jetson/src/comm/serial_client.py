@@ -3,7 +3,7 @@ from typing import Optional
 
 import serial
 
-from littlecar2.comm.interface import Stm32Client
+from comm.interface import Stm32Client
 
 
 @dataclass(frozen=True)

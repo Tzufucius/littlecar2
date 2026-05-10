@@ -1,6 +1,6 @@
 from typing import List
 
-from littlecar2.comm.interface import Stm32Client
+from comm.interface import Stm32Client
 
 
 class MockStm32Client(Stm32Client):

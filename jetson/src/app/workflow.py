@@ -1,8 +1,8 @@
 from pathlib import Path
 from typing import Optional, Union
 
-from littlecar2.domain.events import VisionEvent
-from littlecar2.vision.vision_service import VisionService
+from domain.events import VisionEvent
+from vision.vision_service import VisionService
 
 
 class LittleCarWorkflow:

@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-from littlecar2.vision.types import Detection
+from vision.types import Detection
 
 
 class YoloDetector:

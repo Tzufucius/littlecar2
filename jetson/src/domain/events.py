@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from littlecar2.vision.types import Detection, QRResult
+from vision.types import Detection, QRResult
 
 
 @dataclass(frozen=True)

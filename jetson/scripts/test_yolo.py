@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 
-from littlecar2.vision.yolo_detector import YoloDetector
+from vision.yolo_detector import YoloDetector
 
 
 def main() -> None:
