@@ -196,17 +196,18 @@ int main(void)
   BusServo_Init(&huart4);
   OPS_Init(&huart5);
   WIT_Init();
+
   if (JetsonDebug_Init(&huart6) != JETSON_DEBUG_STATUS_OK)
   {
     printf("JetsonDebug init failed\r\n");
   }
+
   printf("USART1 printf ready\r\n");
   HAL_Delay(1000);
 
-  testEmmV5Datou(1);
-  HAL_Delay(500);
-  // uint8_t *list = {}
-  // HAL_UART_Transmit(&huart3, list, sizeof(list), 1000)
+  // testEmmV5Datou(1);
+  // HAL_Delay(500);
+
 
   /* USER CODE END 2 */
 
