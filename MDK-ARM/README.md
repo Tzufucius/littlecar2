@@ -45,16 +45,17 @@
 - 当前只解析 OPS 上行位姿数据帧，不做任何转发到 Jetson 或上位机的逻辑
 - 当前缓存 `zangle/xangle/yangle/pos_x/pos_y/w_z` 以及对应的 `valid` 和更新时间
 
-## 7. Jetson 通信调试模块
-- 调试实现位于 `Core/Inc/jetson_debug.h` 和 `Core/Src/jetson_debug.c`
-- 当前使用 `USART6`，参数为 `115200 8N1`，无硬件流控
+## 7. PC 与 Jetson 原始接收调试模块
+- 调试实现位于 `Core/Inc/host_rx.h` 和 `Core/Src/host_rx.c`
+- PC 使用 `USART1`，参数为 `115200 8N1`，接收采用 `HAL_UART_Receive_IT()` 单字节中断方式
+- Jetson 使用 `USART6`，参数为 `115200 8N1`，接收采用 `DMA Circular + UART 空闲中断`
 - CubeMX 中 `PC6 / USART6_TX` 和 `PC7 / USART6_RX` 均配置为 `Pull-up`
-- 接收采用 `DMA Circular + UART 空闲中断`
-- `main.c` 只负责调用 `JetsonDebug_Init(&huart6)`、`JetsonDebug_Poll()`，以及在 HAL UART 回调中分发 `USART6`
-- 调试输出通过现有 `printf` 从 `USART1` 输出，不把日志回发到 Jetson
-- Jetson 发送 `hello\r\n` 时，正常输出应包含 `68 65 6C 6C 6F 0D 0A`
-- 若输出 `USART6 ERR code=0x00000004` 或 `0x00000006`，优先检查共地、TX/RX 交叉、电平、串口设备名和 Jetson 串口是否被系统占用
-- 该模块只用于原始链路联调，不代表正式 Jetson 协议解析层
+- `main.c` 只负责调用 `HostRx_InitPc(&huart1)`、`HostRx_InitJetson(&huart6)`、`HostRx_Poll()`，以及在 HAL UART 回调中分发 `USART1` 和 `USART6`
+- 调试输出通过现有 `printf` 从 `USART1` 输出，所以 PC 端会同时看到 STM32 日志和 PC 输入回显日志
+- PC 发送 `hello\r\n` 时，正常输出应包含 `PC RX len=7 hex=68 65 6C 6C 6F 0D 0A ascii=hello\r\n`
+- Jetson 发送 `hello\r\n` 时，正常输出应包含 `JETSON RX len=7 hex=68 65 6C 6C 6F 0D 0A ascii=hello\r\n`
+- 若输出 `PC ERR code=0x...` 或 `JETSON ERR code=0x...`，优先检查波特率、TX/RX 交叉、共地、电平、串口设备名和串口是否被系统占用
+- 当前阶段只验证 PC/Jetson 双路原始接收链路，不解析 `0x5A 0xA5` 协议帧，不校验 CRC，不执行底盘、舵机或传感器业务命令
 
 ## 8. 开发约束
 - 代码应写在 CubeMX 预留的 `USER CODE` 区域
