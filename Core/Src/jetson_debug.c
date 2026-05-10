@@ -11,7 +11,9 @@ static uint16_t g_jetson_rx_last_pos = 0U;
 
 static volatile uint16_t g_jetson_print_length = 0U;
 static volatile uint8_t g_jetson_print_ready = 0U;
+static volatile uint8_t g_jetson_error_ready = 0U;
 static volatile uint32_t g_jetson_overflow_count = 0U;
+static volatile uint32_t g_jetson_uart_error_code = 0U;
 static uint8_t g_jetson_print_buffer[JETSON_DEBUG_PRINT_BUFFER_SIZE] = {0};
 
 static JetsonDebug_Status_t g_jetson_last_status = JETSON_DEBUG_STATUS_NOT_READY;
@@ -124,7 +126,9 @@ JetsonDebug_Status_t JetsonDebug_Init(UART_HandleTypeDef *huart)
   g_jetson_rx_last_pos = 0U;
   g_jetson_print_length = 0U;
   g_jetson_print_ready = 0U;
+  g_jetson_error_ready = 0U;
   g_jetson_overflow_count = 0U;
+  g_jetson_uart_error_code = 0U;
   memset(g_jetson_rx_dma_buffer, 0, sizeof(g_jetson_rx_dma_buffer));
   memset(g_jetson_print_buffer, 0, sizeof(g_jetson_print_buffer));
 
@@ -136,14 +140,16 @@ void JetsonDebug_Poll(void)
   uint8_t local_buffer[JETSON_DEBUG_PRINT_BUFFER_SIZE];
   uint16_t local_length;
   uint32_t overflow_count;
+  uint32_t error_code;
   uint16_t index;
 
-  if (g_jetson_print_ready == 0U)
+  if ((g_jetson_print_ready == 0U) && (g_jetson_error_ready == 0U))
   {
     return;
   }
 
   __disable_irq();
+  error_code = g_jetson_uart_error_code;
   local_length = g_jetson_print_length;
   if (local_length > JETSON_DEBUG_PRINT_BUFFER_SIZE)
   {
@@ -153,8 +159,20 @@ void JetsonDebug_Poll(void)
   overflow_count = g_jetson_overflow_count;
   g_jetson_print_length = 0U;
   g_jetson_print_ready = 0U;
+  g_jetson_error_ready = 0U;
   g_jetson_overflow_count = 0U;
+  g_jetson_uart_error_code = 0U;
   __enable_irq();
+
+  if (error_code != 0U)
+  {
+    printf("USART6 ERR code=0x%08lX\r\n", (unsigned long)error_code);
+  }
+
+  if (local_length == 0U)
+  {
+    return;
+  }
 
   printf("USART6 RX len=%u hex=", (unsigned int)local_length);
   for (index = 0U; index < local_length; ++index)
@@ -207,6 +225,8 @@ void JetsonDebug_OnUartError(UART_HandleTypeDef *huart)
 {
   if ((g_jetson_debug_uart != NULL) && (huart == g_jetson_debug_uart))
   {
+    g_jetson_uart_error_code = huart->ErrorCode;
+    g_jetson_error_ready = 1U;
     g_jetson_last_status = JETSON_DEBUG_STATUS_RX_ERROR;
     (void)JetsonDebug_StartReceive();
   }
