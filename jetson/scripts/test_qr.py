@@ -1,20 +1,16 @@
-import argparse
 from pathlib import Path
 
 import cv2
 
 from vision.qr_detector import QRDetector
 
+IMAGE_PATH = Path("assets/同色.png")
+
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="测试二维码识别")
-    parser.add_argument("--image", default="assets/同色.png", help="测试图片路径")
-    args = parser.parse_args()
-
-    image_path = Path(args.image)
-    frame = cv2.imread(str(image_path))
+    frame = cv2.imread(str(IMAGE_PATH))
     if frame is None:
-        raise SystemExit(f"无法读取图像: {image_path}")
+        raise SystemExit(f"无法读取图像: {IMAGE_PATH}")
 
     result = QRDetector().detect_raw(frame)
     if result is None:

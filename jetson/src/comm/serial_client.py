@@ -14,15 +14,15 @@ class SerialConfig:
 
 
 class SerialStm32Client(Stm32Client):
-    def __init__(self, config: SerialConfig) -> None:
-        self.config = config
+    def __init__(self, serial_options: SerialConfig) -> None:
+        self.serial_options = serial_options
         self.serial_port: Optional[serial.Serial] = None
 
     def open(self) -> None:
         self.serial_port = serial.Serial(
-            port=self.config.port,
-            baudrate=self.config.baudrate,
-            timeout=self.config.timeout,
+            port=self.serial_options.port,
+            baudrate=self.serial_options.baudrate,
+            timeout=self.serial_options.timeout,
         )
 
     def close(self) -> None:

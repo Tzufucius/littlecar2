@@ -1,8 +1,6 @@
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
-
-import yaml
+from typing import Optional, Union
 
 from comm.interface import Stm32Client
 from comm.mock_client import MockStm32Client
@@ -10,61 +8,67 @@ from domain.events import VisionEvent
 from vision.camera import CameraConfig, OpenCVCamera
 from vision.qr_detector import QRChangeFilter, QRDetector
 from vision.vision_service import VisionService
+from vision.yolo_detector import YoloDetector
 
 
-def load_config(path: Union[str, Path]) -> Dict[str, Any]:
-    config_path = Path(path)
-    with config_path.open("r", encoding="utf-8") as file:
-        return yaml.safe_load(file) or {}
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+YOLO_MODEL_PATH = PROJECT_ROOT / "models" / "RGB_circle.pt"
+YOLO_CONF_THRES = 0.5
+YOLO_IOU_THRES = 0.45
+YOLO_DEVICE = "cuda:0"
+
+QR_CHANGE_FILTER = True
+
+CAMERA_INDEX = 0
+CAMERA_WIDTH = 640
+CAMERA_HEIGHT = 480
+
+SERIAL_PORT = "/dev/ttyTHS1"
+SERIAL_BAUDRATE = 115200
+SERIAL_TIMEOUT = 0.1
+
+LOOP_INTERVAL_S = 0.05
 
 
-def build_vision_service(config: Dict[str, Any], project_root: Path) -> VisionService:
-    from vision.yolo_detector import YoloDetector
-
-    vision_config = config.get("vision", {})
-    yolo_config = vision_config.get("yolo", {})
-    model_path = project_root / yolo_config.get("model_path", "models/RGB_circle.pt")
-    yolo_detector = YoloDetector(
-        model_path=model_path,
-        conf_thres=float(yolo_config.get("conf_thres", 0.5)),
-        iou_thres=float(yolo_config.get("iou_thres", 0.45)),
-        device=yolo_config.get("device"),
-    )
-
+def build_vision_service() -> VisionService:
     qr_filter = None
-    if vision_config.get("qr", {}).get("change_filter", True):
+    if QR_CHANGE_FILTER:
         qr_filter = QRChangeFilter()
 
     return VisionService(
         qr_detector=QRDetector(),
-        yolo_detector=yolo_detector,
+        yolo_detector=YoloDetector(
+            model_path=YOLO_MODEL_PATH,
+            conf_thres=YOLO_CONF_THRES,
+            iou_thres=YOLO_IOU_THRES,
+            device=YOLO_DEVICE,
+        ),
         qr_change_filter=qr_filter,
     )
 
 
-def build_camera(config: Dict[str, Any]) -> OpenCVCamera:
-    camera_config = config.get("vision", {}).get("camera", {})
+def build_camera() -> OpenCVCamera:
     return OpenCVCamera(
         CameraConfig(
-            index=int(camera_config.get("index", 0)),
-            width=camera_config.get("width"),
-            height=camera_config.get("height"),
+            index=CAMERA_INDEX,
+            width=CAMERA_WIDTH,
+            height=CAMERA_HEIGHT,
         )
     )
 
 
-def build_stm32_client(config: Dict[str, Any], use_mock: bool = False) -> Stm32Client:
+def build_stm32_client(use_mock: bool = False) -> Stm32Client:
     if use_mock:
         return MockStm32Client()
 
     from comm.serial_client import SerialConfig, SerialStm32Client
 
-    serial_config = config.get("comm", {}).get("serial", {})
     return SerialStm32Client(
         SerialConfig(
-            port=serial_config.get("port", "/dev/ttyTHS1"),
-            baudrate=int(serial_config.get("baudrate", 115200)),
-            timeout=float(serial_config.get("timeout", 0.1)),
+            port=SERIAL_PORT,
+            baudrate=SERIAL_BAUDRATE,
+            timeout=SERIAL_TIMEOUT,
         )
     )
 
@@ -142,13 +146,10 @@ class RobotMain:
 
 
 def build_robot_main(
-    config: Dict[str, Any],
-    project_root: Path,
     use_mock_comm: bool = False,
 ) -> RobotMain:
-    app_config = config.get("app", {})
     return RobotMain(
-        vision_service=build_vision_service(config, project_root),
-        stm32_client=build_stm32_client(config, use_mock=use_mock_comm),
-        loop_interval_s=float(app_config.get("loop_interval_s", 0.05)),
+        vision_service=build_vision_service(),
+        stm32_client=build_stm32_client(use_mock=use_mock_comm),
+        loop_interval_s=LOOP_INTERVAL_S,
     )

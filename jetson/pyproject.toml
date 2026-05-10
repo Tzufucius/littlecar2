@@ -11,7 +11,6 @@ requires-python = ">=3.9"
 dependencies = [
   "numpy>=1.23",
   "opencv-python>=4.8",
-  "pyyaml>=6.0",
   "pyserial>=3.5",
   "ultralytics>=8.0"
 ]

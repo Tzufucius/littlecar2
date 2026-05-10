@@ -13,18 +13,18 @@ class CameraConfig:
 
 
 class OpenCVCamera:
-    def __init__(self, config: CameraConfig) -> None:
-        self.config = config
+    def __init__(self, camera_options: CameraConfig) -> None:
+        self.camera_options = camera_options
         self.capture: Optional[cv2.VideoCapture] = None
 
     def open(self) -> None:
-        self.capture = cv2.VideoCapture(self.config.index)
-        if self.config.width is not None:
-            self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.config.width)
-        if self.config.height is not None:
-            self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config.height)
+        self.capture = cv2.VideoCapture(self.camera_options.index)
+        if self.camera_options.width is not None:
+            self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_options.width)
+        if self.camera_options.height is not None:
+            self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera_options.height)
         if not self.capture.isOpened():
-            raise RuntimeError(f"无法打开摄像头: {self.config.index}")
+            raise RuntimeError(f"无法打开摄像头: {self.camera_options.index}")
 
     def read(self) -> np.ndarray:
         if self.capture is None:

@@ -1,18 +1,14 @@
-import argparse
-
 from comm.mock_client import MockStm32Client
 from comm.protocol import Frame
 from comm.serial_client import SerialConfig, SerialStm32Client
 from domain.enums import CmdSet, MsgType
 
+USE_MOCK_CLIENT = True
+SERIAL_PORT = "/dev/ttyTHS1"
+SERIAL_BAUDRATE = 115200
+
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="测试 STM32 串口发送")
-    parser.add_argument("--mock", action="store_true", help="使用 mock 客户端")
-    parser.add_argument("--port", default="/dev/ttyTHS1", help="串口设备")
-    parser.add_argument("--baudrate", type=int, default=115200, help="波特率")
-    args = parser.parse_args()
-
     frame = Frame(
         msg_type=MsgType.CMD,
         cmd_set=CmdSet.SYSTEM,
@@ -21,10 +17,12 @@ def main() -> None:
         payload=b"",
     ).to_bytes()
 
-    if args.mock:
+    if USE_MOCK_CLIENT:
         client = MockStm32Client()
     else:
-        client = SerialStm32Client(SerialConfig(port=args.port, baudrate=args.baudrate))
+        client = SerialStm32Client(
+            SerialConfig(port=SERIAL_PORT, baudrate=SERIAL_BAUDRATE)
+        )
 
     with client:
         client.send(frame)
