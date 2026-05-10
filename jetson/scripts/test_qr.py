@@ -1,14 +1,26 @@
 from pathlib import Path
+import sys
 
 import cv2
+import numpy as np
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from vision.qr_detector import QRDetector
 
 IMAGE_PATH = Path("assets/同色.png")
 
 
+def read_image(path: Path):
+    data = np.fromfile(str(path), dtype=np.uint8)
+    if data.size == 0:
+        return None
+    return cv2.imdecode(data, cv2.IMREAD_COLOR)
+
+
 def main() -> None:
-    frame = cv2.imread(str(IMAGE_PATH))
+    frame = read_image(IMAGE_PATH)
     if frame is None:
         raise SystemExit(f"无法读取图像: {IMAGE_PATH}")
 

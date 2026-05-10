@@ -1,3 +1,9 @@
+from pathlib import Path
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
 from comm.mock_client import MockStm32Client
 from comm.protocol import Frame
 from comm.serial_client import SerialConfig, SerialStm32Client
