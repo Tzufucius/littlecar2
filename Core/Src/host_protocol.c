@@ -3,6 +3,22 @@
 #include <stdbool.h>
 #include <string.h>
 
+/*
+ * 上位机主控协议说明
+ *
+ * 当前协议面向 Jetson / Windows 上位机，底层默认从 USART6 接收。
+ * PC 调试口 USART1 也可注册进同一解析器，用于串口助手发帧测试。
+ *
+ * 基础帧格式：
+ *   5A A5 Version MsgType CmdSet CmdID Seq_L Seq_H Length Payload CRC_L CRC_H
+ *
+ * 关键约定：
+ * - Header 固定为 0x5A 0xA5。
+ * - Version 当前固定为 0x01。
+ * - Seq、Payload 内的多字节整数均为小端。
+ * - CRC 使用 CRC16-Modbus，从 Version 字节开始计算，到 Payload 最后一个字节结束。
+ * - 中断 / DMA 回调只负责喂入字节流，命令执行统一放在 HostProtocol_Poll()。
+ */
 #define HOST_PROTOCOL_HEADER1          ((uint8_t)0x5AU)
 #define HOST_PROTOCOL_HEADER2          ((uint8_t)0xA5U)
 #define HOST_PROTOCOL_VERSION          ((uint8_t)0x01U)
@@ -16,19 +32,25 @@
 
 typedef enum
 {
+  /* 上位机发给 STM32 的控制命令。 */
   MSG_CMD = 0x01,
+  /* STM32 对命令接收和执行结果的确认。 */
   MSG_ACK = 0x02
 } HostProtocol_MsgType_t;
 
 typedef enum
 {
+  /* 通信测试、心跳、模式设置。 */
   CMDSET_SYSTEM = 0x01,
+  /* 急停、安全停止、安全状态清除。 */
   CMDSET_SAFETY = 0x02,
+  /* 底盘使能、停止、四轮 RPM、麦克纳姆合成速度。 */
   CMDSET_CHASSIS = 0x03
 } HostProtocol_CmdSet_t;
 
 typedef enum
 {
+  /* result 字段会放入 ACK Payload[2]，上位机据此判断命令是否执行。 */
   ACK_OK = 0x00,
   ACK_BAD_CRC = 0x01,
   ACK_BAD_LENGTH = 0x02,
@@ -41,8 +63,11 @@ typedef enum
 
 typedef struct
 {
+  /* 正在收集的一帧原始数据，包含帧头和 CRC。 */
   uint8_t frame[HOST_PROTOCOL_MAX_FRAME_LEN];
+  /* 当前已经收到的字节数。 */
   uint16_t pos;
+  /* 收到 Length 字段后才能确定完整帧总长。 */
   uint16_t expected_len;
 } HostProtocol_Parser_t;
 
@@ -70,6 +95,7 @@ static uint8_t g_heartbeat_online = 0U;
 static uint8_t g_safety_latched = 0U;
 static uint8_t g_control_mode = 0U;
 
+/* 协议中 uint16_t 使用小端：低字节在前，高字节在后。 */
 static uint16_t HostProtocol_ReadU16(const uint8_t *data)
 {
   return (uint16_t)((uint16_t)data[0] | ((uint16_t)data[1] << 8));
@@ -94,6 +120,15 @@ static void HostProtocol_WriteU16(uint8_t *data, uint16_t value)
   data[1] = (uint8_t)((value >> 8) & 0xFFU);
 }
 
+/*
+ * CRC16-Modbus 计算。
+ *
+ * 调试时注意：
+ * - 初值 0xFFFF，多项式 0xA001。
+ * - 输入 data 必须从 frame[2] 也就是 Version 开始。
+ * - length = 7 + payload_len，对应 Version..Length..Payload。
+ * - 返回值发送时仍按小端拆成 CRC_L、CRC_H。
+ */
 static uint16_t HostProtocol_Crc16Modbus(const uint8_t *data, uint16_t length)
 {
   uint16_t crc = 0xFFFFU;
@@ -137,6 +172,12 @@ static uint8_t HostProtocol_AbsRpmTooLarge(int16_t rpm)
   return (value > (int32_t)CHASSIS_MAX_RPM) ? 1U : 0U;
 }
 
+/*
+ * 普通底盘命令的安全闸门。
+ *
+ * 急停锁定后，或者已经启用过心跳但心跳超时后，普通运动命令会被拒绝。
+ * SAFETY 命令本身不走这个检查，保证急停/清除等动作仍可执行。
+ */
 static uint8_t HostProtocol_IsControlAllowed(void)
 {
   if (g_safety_latched != 0U)
@@ -152,6 +193,7 @@ static uint8_t HostProtocol_IsControlAllowed(void)
   return 1U;
 }
 
+/* 收到过心跳后，如果超过 300ms 未刷新，则认为上位机离线并停车。 */
 static void HostProtocol_CheckHeartbeatTimeout(void)
 {
   if ((g_heartbeat_seen != 0U) &&
@@ -163,6 +205,12 @@ static void HostProtocol_CheckHeartbeatTimeout(void)
   }
 }
 
+/*
+ * 把校验通过的完整帧转成轻量命令对象，放入主循环队列。
+ *
+ * 这样 DMA/IDLE 回调不会直接调用电机、舵机等业务函数，降低中断内耗时
+ * 和串口收包期间的竞态风险。
+ */
 static uint8_t HostProtocol_EnqueueFrame(HostProtocol_Source_t source, const uint8_t *frame, uint16_t frame_len)
 {
   HostProtocol_Frame_t *item;
@@ -199,7 +247,7 @@ static uint8_t HostProtocol_EnqueueFrame(HostProtocol_Source_t source, const uin
   return 1U;
 }
 
-/* 主循环取命令时短暂关中断，避免和接收回调同时改队列索引。 */
+/* 主循环取命令时短暂关中断，避免和接收回调同时修改队列索引。 */
 static uint8_t HostProtocol_DequeueFrame(HostProtocol_Frame_t *frame)
 {
   if (frame == NULL)
@@ -221,7 +269,14 @@ static uint8_t HostProtocol_DequeueFrame(HostProtocol_Frame_t *frame)
   return 1U;
 }
 
-/* ACK 使用原命令 Seq，方便上位机按请求序号匹配结果。 */
+/*
+ * 回发 ACK。
+ *
+ * ACK 帧使用原命令的 CmdSet / CmdID / Seq，Payload 固定 4 字节：
+ *   ack_seq_l ack_seq_h result detail
+ *
+ * 上位机调试时只要按 Seq 匹配 ACK，就能判断哪条命令成功或失败。
+ */
 static void HostProtocol_SendAck(const HostProtocol_Frame_t *frame, HostProtocol_AckResult_t result, uint8_t detail)
 {
   UART_HandleTypeDef *huart;
@@ -256,15 +311,17 @@ static void HostProtocol_SendAck(const HostProtocol_Frame_t *frame, HostProtocol
   (void)HAL_UART_Transmit(huart, tx, (uint16_t)sizeof(tx), HOST_PROTOCOL_TX_TIMEOUT_MS);
 }
 
-/* 系统命令只维护通信状态，不直接控制外设。 */
+/* SYSTEM 命令只维护通信状态，不直接控制外设。 */
 static HostProtocol_AckResult_t HostProtocol_HandleSystem(const HostProtocol_Frame_t *frame)
 {
   switch (frame->cmd_id)
   {
     case 0x01U:
+      /* SYS_PING：无 Payload，只用于确认协议链路和 ACK。 */
       return (frame->payload_len == 0U) ? ACK_OK : ACK_BAD_LENGTH;
 
     case 0x02U:
+      /* SYS_HEARTBEAT：Payload 为 uint32_t 上位机时间戳，当前只用于刷新在线状态。 */
       if (frame->payload_len != 4U)
       {
         return ACK_BAD_LENGTH;
@@ -276,6 +333,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleSystem(const HostProtocol_Fra
       return ACK_OK;
 
     case 0x03U:
+      /* SYS_SET_MODE：预留控制模式，当前只保存值，不改变执行逻辑。 */
       if (frame->payload_len != 1U)
       {
         return ACK_BAD_LENGTH;
@@ -288,12 +346,13 @@ static HostProtocol_AckResult_t HostProtocol_HandleSystem(const HostProtocol_Fra
   }
 }
 
-/* 安全命令允许打断普通底盘运动。 */
+/* SAFETY 命令允许打断普通底盘运动。 */
 static HostProtocol_AckResult_t HostProtocol_HandleSafety(const HostProtocol_Frame_t *frame)
 {
   switch (frame->cmd_id)
   {
     case 0x01U:
+      /* SAFETY_ESTOP：锁定安全状态并立即停车。 */
       if (frame->payload_len != 1U)
       {
         return ACK_BAD_LENGTH;
@@ -304,6 +363,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleSafety(const HostProtocol_Fra
       return ACK_OK;
 
     case 0x02U:
+      /* SAFETY_SAFE_STOP：mode=0 平滑停止，mode=1 立即停止。 */
       if (frame->payload_len != 1U)
       {
         return ACK_BAD_LENGTH;
@@ -323,6 +383,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleSafety(const HostProtocol_Fra
       return ACK_OK;
 
     case 0x03U:
+      /* SAFETY_CLEAR：清除可恢复安全锁定，后续普通底盘命令可继续执行。 */
       if (frame->payload_len != 0U)
       {
         return ACK_BAD_LENGTH;
@@ -335,7 +396,11 @@ static HostProtocol_AckResult_t HostProtocol_HandleSafety(const HostProtocol_Fra
   }
 }
 
-/* 底盘命令只调用 chassis_motion 高层接口，不暴露底层 Emm_V5 帧。 */
+/*
+ * CHASSIS 命令只调用 chassis_motion 高层接口。
+ *
+ * 上位机不直接暴露 Emm_V5 / ZDT 原始帧，避免上位机绑定具体电机协议。
+ */
 static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Frame_t *frame)
 {
   int16_t lf_rpm;
@@ -354,6 +419,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
   switch (frame->cmd_id)
   {
     case 0x01U:
+      /* CHASSIS_ENABLE：Payload[0] = 0 禁用，1 使能。 */
       if (frame->payload_len != 1U)
       {
         return ACK_BAD_LENGTH;
@@ -366,6 +432,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
       return ACK_OK;
 
     case 0x02U:
+      /* CHASSIS_STOP：Payload[0] = 0 平滑停止，1 立即停止。 */
       if (frame->payload_len != 1U)
       {
         return ACK_BAD_LENGTH;
@@ -385,6 +452,11 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
       return ACK_OK;
 
     case 0x03U:
+      /*
+       * CHASSIS_SET_MOTOR_RPM：
+       *   lf_rpm, rf_rpm, lr_rpm, rr_rpm 为 int16_t 小端，单位 RPM。
+       *   acc 为 Emm 加速度参数。
+       */
       if (frame->payload_len != 9U)
       {
         return ACK_BAD_LENGTH;
@@ -404,6 +476,12 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
       return ACK_OK;
 
     case 0x04U:
+      /*
+       * CHASSIS_MOVE_MECANUM：
+       *   forward_rpm > 0 前进
+       *   strafe_rpm  > 0 右平移
+       *   rotate_rpm  > 0 右旋
+       */
       if (frame->payload_len != 7U)
       {
         return ACK_BAD_LENGTH;
@@ -425,6 +503,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
   }
 }
 
+/* 按 MsgType + CmdSet 分发命令，所有未知组合统一返回 ACK_UNKNOWN_CMD。 */
 static HostProtocol_AckResult_t HostProtocol_HandleCommand(const HostProtocol_Frame_t *frame)
 {
   if (frame->msg_type != MSG_CMD)
@@ -448,6 +527,15 @@ static HostProtocol_AckResult_t HostProtocol_HandleCommand(const HostProtocol_Fr
   }
 }
 
+/*
+ * 单字节喂入式解析状态机。
+ *
+ * 调试关注点：
+ * - pos=0 等待 0x5A。
+ * - pos=1 等待 0xA5，若再次收到 0x5A 会重新作为新帧头处理。
+ * - 收满 9 字节基础头后检查 Version，并根据 Length 计算 expected_len。
+ * - 收满 expected_len 后校验 CRC，通过才入队，失败直接丢弃。
+ */
 static void HostProtocol_FeedByte(HostProtocol_Source_t source, uint8_t byte)
 {
   HostProtocol_Parser_t *parser = &g_host_protocol_parser[source];
@@ -503,6 +591,7 @@ static void HostProtocol_FeedByte(HostProtocol_Source_t source, uint8_t byte)
 
   if ((parser->expected_len > 0U) && (parser->pos >= parser->expected_len))
   {
+    /* CRC 字段本身不参与计算；计算范围从 Version 到 Payload 结束。 */
     crc_recv = HostProtocol_ReadU16(&parser->frame[parser->expected_len - HOST_PROTOCOL_CRC_LEN]);
     crc_calc = HostProtocol_Crc16Modbus(&parser->frame[2], (uint16_t)(7U + parser->frame[8]));
     if (crc_recv == crc_calc)
@@ -513,6 +602,7 @@ static void HostProtocol_FeedByte(HostProtocol_Source_t source, uint8_t byte)
   }
 }
 
+/* 注册接收源对应 UART，主要用于 ACK 回发。 */
 void HostProtocol_RegisterSource(HostProtocol_Source_t source, UART_HandleTypeDef *huart)
 {
   if (source >= HOST_PROTOCOL_SOURCE_COUNT)
@@ -526,6 +616,7 @@ void HostProtocol_RegisterSource(HostProtocol_Source_t source, UART_HandleTypeDe
   g_last_status = HOST_PROTOCOL_STATUS_OK;
 }
 
+/* 从 DMA/IDLE 接收层输入原始字节，可一次输入半帧、多帧或粘包数据。 */
 void HostProtocol_OnBytes(HostProtocol_Source_t source, const uint8_t *data, uint16_t length)
 {
   uint16_t index;
@@ -542,6 +633,7 @@ void HostProtocol_OnBytes(HostProtocol_Source_t source, const uint8_t *data, uin
   }
 }
 
+/* 主循环调用：检查心跳、执行已入队命令，并给上位机回 ACK。 */
 void HostProtocol_Poll(void)
 {
   HostProtocol_Frame_t frame;

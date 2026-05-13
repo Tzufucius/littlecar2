@@ -3,6 +3,17 @@
 #include <stdio.h>
 #include <string.h>
 
+/*
+ * 上位机原始接收桥接层。
+ *
+ * 本文件负责两件事：
+ * - 使用 DMA + UART IDLE 接收 PC / Jetson 的原始字节流，并打印 hex/ascii 方便调试。
+ * - 将同一份字节流送入 host_protocol，由协议层负责找帧、CRC 校验、命令入队和 ACK。
+ *
+ * 注意：
+ * - 这里不直接执行底盘、舵机、传感器业务命令。
+ * - 如果串口助手只发 hello\r\n，会看到原始回显日志，但不会触发正式协议命令。
+ */
 #define HOST_RX_DMA_BUFFER_SIZE    ((uint16_t)256U)
 #define HOST_RX_PRINT_BUFFER_SIZE  ((uint16_t)256U)
 
@@ -73,6 +84,7 @@ static HostRx_Status_t HostRx_StartDmaReceive(HostRx_Source_t source)
 
   if (channel->uart->hdmarx != NULL)
   {
+    /* 半传输中断对当前协议无意义，关闭后只处理 IDLE / 满缓冲事件。 */
     __HAL_DMA_DISABLE_IT(channel->uart->hdmarx, DMA_IT_HT);
   }
 
@@ -108,7 +120,10 @@ static void HostRx_AppendReceivedData(HostRx_Source_t source, const uint8_t *dat
     return;
   }
 
-  /* 原始接收数据同时送入上下位机协议解析层。 */
+  /*
+   * 同一份原始接收数据同时进入协议层。
+   * 协议层能够处理拆包、粘包和连续多帧；这里不需要按帧切分。
+   */
   HostProtocol_OnBytes((HostProtocol_Source_t)source, data, length);
 
   channel = &g_host_rx_channels[source];
@@ -161,12 +176,14 @@ static void HostRx_HandleDmaRxEvent(HostRx_Source_t source, uint16_t size)
 
   if (current_pos > channel->dma_last_pos)
   {
+    /* 普通情况：DMA 写指针向前移动，只取新增区间。 */
     HostRx_AppendReceivedData(source,
                               &channel->dma_buffer[channel->dma_last_pos],
                               (uint16_t)(current_pos - channel->dma_last_pos));
   }
   else
   {
+    /* 环形缓冲区回绕：先取尾部，再取头部。 */
     HostRx_AppendReceivedData(source,
                               &channel->dma_buffer[channel->dma_last_pos],
                               (uint16_t)(HOST_RX_DMA_BUFFER_SIZE - channel->dma_last_pos));
@@ -193,6 +210,7 @@ static void HostRx_PrintChannel(HostRx_Channel_t *channel)
   }
 
   __disable_irq();
+  /* 将中断侧累积的打印数据搬到局部缓冲，随后立即恢复中断。 */
   error_code = channel->uart_error_code;
   local_length = channel->print_length;
   if (local_length > HOST_RX_PRINT_BUFFER_SIZE)
@@ -273,6 +291,7 @@ HostRx_Status_t HostRx_InitPc(UART_HandleTypeDef *huart)
 
   channel->uart = huart;
   HostRx_ResetChannel(channel);
+  /* PC 调试口也注册到协议层，便于用串口助手验证 0x5A 0xA5 帧。 */
   HostProtocol_RegisterSource(HOST_PROTOCOL_SOURCE_PC, huart);
   return HostRx_StartDmaReceive(HOST_RX_SOURCE_PC);
 }
@@ -289,12 +308,14 @@ HostRx_Status_t HostRx_InitJetson(UART_HandleTypeDef *huart)
 
   channel->uart = huart;
   HostRx_ResetChannel(channel);
+  /* Jetson 是正式上位机入口，ACK 会从 huart6 回发。 */
   HostProtocol_RegisterSource(HOST_PROTOCOL_SOURCE_JETSON, huart);
   return HostRx_StartDmaReceive(HOST_RX_SOURCE_JETSON);
 }
 
 void HostRx_Poll(void)
 {
+  /* 先执行正式协议命令，再输出原始收包日志，方便观察命令和 ACK。 */
   HostProtocol_Poll();
   HostRx_PrintChannel(&g_host_rx_channels[HOST_RX_SOURCE_PC]);
   HostRx_PrintChannel(&g_host_rx_channels[HOST_RX_SOURCE_JETSON]);
