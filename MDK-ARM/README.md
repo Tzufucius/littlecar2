@@ -3,6 +3,7 @@
 ## 1. 项目说明
 
 本工程基于 STM32F407ZGT6 和 HAL 库，用于管理底盘电机、总线舵机、WIT IMU、OPS 定位系统，以及 PC / Jetson 上位机通信。
+我们使用有4个步进电机来控制底盘的前进后退等移动运动。由三个舵机来控制一些旋转的运动，包括夹爪的开合物料盘的旋转以及机械臂的旋转。
 
 当前目录是 Keil 工程文件 `4-29.uvprojx` 所在的 `MDK-ARM` 目录。上层目录为 `4-29`，主要包含：
 
@@ -44,6 +45,19 @@
 | UART4 | Asynchronous | PA0 | PA1 | 总线舵机 | `drive_bus_servo.*` |
 | UART5 | Asynchronous | PC12 | PD2 | OPS 定位系统 | `sensor_ops.*` |
 | USART6 | Asynchronous | PC6 | PC7 | Jetson 原始接收 / 通信协议 | `comm_pc.*`、`comm_jetson.*`、`comm_protocol.*` |
+
+对于电机和舵机，我们通过id编号进行配置
+- 步进电机
+    - 1 左前
+    - 2 左后
+    - 3 右前
+    - 4 右后
+    - 5 控制丝杆上下运动
+    - 6 控制机械臂前后平移
+- 舵机
+    - 1 物料盘旋转
+    - 2 机械臂旋转
+    - 3 机械臂抓取
 
 ## 4. 模块说明
 
