@@ -402,6 +402,11 @@
               <FilePath>../Core/Src/advance_chassis.c</FilePath>
             </File>
             <File>
+              <FileName>advance_world.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/advance_world.c</FilePath>
+            </File>
+            <File>
               <FileName>car_pose.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/car_pose.c</FilePath>
