@@ -63,6 +63,7 @@ void OPS_OnUartError(void);
  * @brief 获取完整的位姿结构体
  */
 OPS_Status_t OPS_GetPose(OPS_Pose_t *pose);
+const volatile OPS_Pose_t *OPS_GetPoseRef(void);
 
 #ifdef __cplusplus
 }

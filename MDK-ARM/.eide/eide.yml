@@ -26,25 +26,27 @@ virtualFolder:
                 - path: ../Core/Inc/main.h
                 - path: ../Core/Inc/stm32f4xx_hal_conf.h
                 - path: ../Core/Inc/stm32f4xx_it.h
-                - path: ../Core/Inc/zdt_stepper.h
                 - path: ../Core/Src/system_stm32f4xx.c
-                - path: ../Core/Src/zdt_stepper.c
-                - path: ../Core/Inc/bus_servo.h
-                - path: ../Core/Src/bus_servo.c
-                - path: ../Core/Src/wit_imu.c
-                - path: ../Core/Inc/wit_imu.h
-                - path: ../Core/Inc/jetson_debug.h
-                - path: ../Core/Src/jetson_debug.c
-                - path: ../Core/Inc/ops_sensor.h
-                - path: ../Core/Src/ops_sensor.c
-                - path: ../Core/Inc/Emm_V5.h
-                - path: ../Core/Src/Emm_V5.c
-                - path: ../Core/Inc/chassis_motion.h
-                - path: ../Core/Src/chassis_motion.c
-                - path: ../Core/Inc/host_rx.h
-                - path: ../Core/Src/host_rx.c
-                - path: ../Core/Inc/host_protocol.h
-                - path: ../Core/Src/host_protocol.c
+                - path: ../Core/Inc/advance_chassis.h
+                - path: ../Core/Inc/car_pose.h
+                - path: ../Core/Inc/comm_jetson.h
+                - path: ../Core/Inc/comm_pc.h
+                - path: ../Core/Inc/comm_protocol.h
+                - path: ../Core/Inc/drive_bus_servo.h
+                - path: ../Core/Inc/drive_emm.h
+                - path: ../Core/Inc/sensor_ops.h
+                - path: ../Core/Inc/sensor_wit.h
+                - path: ../Core/Src/advance_chassis.c
+                - path: ../Core/Src/car_pose.c
+                - path: ../Core/Src/comm_jetson.c
+                - path: ../Core/Src/comm_pc.c
+                - path: ../Core/Src/comm_protocol.c
+                - path: ../Core/Src/drive_bus_servo.c
+                - path: ../Core/Src/drive_emm.c
+                - path: ../Core/Src/sensor_ops.c
+                - path: ../Core/Src/sensor_wit.c
+                - path: ../Core/Src/advance_world.c
+                - path: ../Core/Inc/advance_world.h
               folders: []
     - name: Drivers
       files: []

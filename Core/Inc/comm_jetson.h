@@ -1,5 +1,5 @@
-#ifndef __JETSON_DEBUG_H__
-#define __JETSON_DEBUG_H__
+#ifndef __comm_jetson_H__
+#define __comm_jetson_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,11 +10,11 @@ extern "C" {
 
 typedef enum
 {
-  JETSON_DEBUG_STATUS_OK = 0,
-  JETSON_DEBUG_STATUS_INVALID_PARAM,
-  JETSON_DEBUG_STATUS_NOT_READY,
-  JETSON_DEBUG_STATUS_RX_ERROR,
-  JETSON_DEBUG_STATUS_OVERFLOW
+  comm_jetson_STATUS_OK = 0,
+  comm_jetson_STATUS_INVALID_PARAM,
+  comm_jetson_STATUS_NOT_READY,
+  comm_jetson_STATUS_RX_ERROR,
+  comm_jetson_STATUS_OVERFLOW
 } JetsonDebug_Status_t;
 
 JetsonDebug_Status_t JetsonDebug_Init(UART_HandleTypeDef *huart);

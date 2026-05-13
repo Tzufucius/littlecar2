@@ -1,5 +1,5 @@
-#ifndef __HOST_RX_H__
-#define __HOST_RX_H__
+#ifndef __comm_pc_H__
+#define __comm_pc_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,18 +10,18 @@ extern "C" {
 
 typedef enum
 {
-  HOST_RX_STATUS_OK = 0,
-  HOST_RX_STATUS_INVALID_PARAM,
-  HOST_RX_STATUS_NOT_READY,
-  HOST_RX_STATUS_RX_ERROR,
-  HOST_RX_STATUS_OVERFLOW
+  comm_pc_STATUS_OK = 0,
+  comm_pc_STATUS_INVALID_PARAM,
+  comm_pc_STATUS_NOT_READY,
+  comm_pc_STATUS_RX_ERROR,
+  comm_pc_STATUS_OVERFLOW
 } HostRx_Status_t;
 
 typedef enum
 {
-  HOST_RX_SOURCE_PC = 0,
-  HOST_RX_SOURCE_JETSON,
-  HOST_RX_SOURCE_COUNT
+  comm_pc_SOURCE_PC = 0,
+  comm_pc_SOURCE_JETSON,
+  comm_pc_SOURCE_COUNT
 } HostRx_Source_t;
 
 HostRx_Status_t HostRx_InitPc(UART_HandleTypeDef *huart);

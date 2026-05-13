@@ -387,49 +387,54 @@
           <GroupName>Application/User/Core</GroupName>
           <Files>
             <File>
-              <FileName>bus_servo.c</FileName>
+              <FileName>drive_bus_servo.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../Core/Src/bus_servo.c</FilePath>
+              <FilePath>../Core/Src/drive_bus_servo.c</FilePath>
             </File>
             <File>
-              <FileName>zdt_stepper.c</FileName>
+              <FileName>drive_emm.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../Core/Src/zdt_stepper.c</FilePath>
+              <FilePath>../Core/Src/drive_emm.c</FilePath>
             </File>
             <File>
-              <FileName>Emm_V5.c</FileName>
+              <FileName>advance_chassis.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../Core/Src/Emm_V5.c</FilePath>
+              <FilePath>../Core/Src/advance_chassis.c</FilePath>
             </File>
             <File>
-              <FileName>chassis_motion.c</FileName>
+              <FileName>advance_world.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../Core/Src/chassis_motion.c</FilePath>
+              <FilePath>../Core/Src/advance_world.c</FilePath>
             </File>
             <File>
-              <FileName>ops_sensor.c</FileName>
+              <FileName>car_pose.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../Core/Src/ops_sensor.c</FilePath>
+              <FilePath>../Core/Src/car_pose.c</FilePath>
             </File>
             <File>
-              <FileName>wit_imu.c</FileName>
+              <FileName>sensor_ops.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../Core/Src/wit_imu.c</FilePath>
+              <FilePath>../Core/Src/sensor_ops.c</FilePath>
             </File>
             <File>
-              <FileName>jetson_debug.c</FileName>
+              <FileName>sensor_wit.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../Core/Src/jetson_debug.c</FilePath>
+              <FilePath>../Core/Src/sensor_wit.c</FilePath>
             </File>
             <File>
-              <FileName>host_rx.c</FileName>
+              <FileName>comm_jetson.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../Core/Src/host_rx.c</FilePath>
+              <FilePath>../Core/Src/comm_jetson.c</FilePath>
             </File>
             <File>
-              <FileName>host_protocol.c</FileName>
+              <FileName>comm_pc.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../Core/Src/host_protocol.c</FilePath>
+              <FilePath>../Core/Src/comm_pc.c</FilePath>
+            </File>
+            <File>
+              <FileName>comm_protocol.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/comm_protocol.c</FilePath>
             </File>
             <File>
               <FileName>main.c</FileName>

@@ -1,5 +1,5 @@
-#include "host_rx.h"
-#include "host_protocol.h"
+#include "comm_pc.h"
+#include "comm_protocol.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -8,22 +8,22 @@
  *
  * 本文件负责两件事：
  * - 使用 DMA + UART IDLE 接收 PC / Jetson 的原始字节流，并打印 hex/ascii 方便调试。
- * - 将同一份字节流送入 host_protocol，由协议层负责找帧、CRC 校验、命令入队和 ACK。
+ * - 将同一份字节流送入 comm_protocol，由协议层负责找帧、CRC 校验、命令入队和 ACK。
  *
  * 注意：
  * - 这里不直接执行底盘、舵机、传感器业务命令。
  * - 如果串口助手只发 hello\r\n，会看到原始回显日志，但不会触发正式协议命令。
  */
-#define HOST_RX_DMA_BUFFER_SIZE    ((uint16_t)256U)
-#define HOST_RX_PRINT_BUFFER_SIZE  ((uint16_t)256U)
+#define comm_pc_DMA_BUFFER_SIZE    ((uint16_t)256U)
+#define comm_pc_PRINT_BUFFER_SIZE  ((uint16_t)256U)
 
 typedef struct
 {
   const char *name;
   UART_HandleTypeDef *uart;
-  uint8_t dma_buffer[HOST_RX_DMA_BUFFER_SIZE];
+  uint8_t dma_buffer[comm_pc_DMA_BUFFER_SIZE];
   uint16_t dma_last_pos;
-  uint8_t print_buffer[HOST_RX_PRINT_BUFFER_SIZE];
+  uint8_t print_buffer[comm_pc_PRINT_BUFFER_SIZE];
   volatile uint16_t print_length;
   volatile uint8_t print_ready;
   volatile uint8_t error_ready;
@@ -32,8 +32,8 @@ typedef struct
   HostRx_Status_t last_status;
 } HostRx_Channel_t;
 
-static HostRx_Channel_t g_host_rx_channels[HOST_RX_SOURCE_COUNT] = {
-  [HOST_RX_SOURCE_PC] = {
+static HostRx_Channel_t g_comm_pc_channels[comm_pc_SOURCE_COUNT] = {
+  [comm_pc_SOURCE_PC] = {
     .name = "PC",
     .uart = NULL,
     .dma_last_pos = 0U,
@@ -42,9 +42,9 @@ static HostRx_Channel_t g_host_rx_channels[HOST_RX_SOURCE_COUNT] = {
     .error_ready = 0U,
     .overflow_count = 0U,
     .uart_error_code = 0U,
-    .last_status = HOST_RX_STATUS_NOT_READY
+    .last_status = comm_pc_STATUS_NOT_READY
   },
-  [HOST_RX_SOURCE_JETSON] = {
+  [comm_pc_SOURCE_JETSON] = {
     .name = "JETSON",
     .uart = NULL,
     .dma_last_pos = 0U,
@@ -53,7 +53,7 @@ static HostRx_Channel_t g_host_rx_channels[HOST_RX_SOURCE_COUNT] = {
     .error_ready = 0U,
     .overflow_count = 0U,
     .uart_error_code = 0U,
-    .last_status = HOST_RX_STATUS_NOT_READY
+    .last_status = comm_pc_STATUS_NOT_READY
   }
 };
 
@@ -61,24 +61,24 @@ static HostRx_Status_t HostRx_StartDmaReceive(HostRx_Source_t source)
 {
   HostRx_Channel_t *channel;
 
-  if (source >= HOST_RX_SOURCE_COUNT)
+  if (source >= comm_pc_SOURCE_COUNT)
   {
-    return HOST_RX_STATUS_INVALID_PARAM;
+    return comm_pc_STATUS_INVALID_PARAM;
   }
 
-  channel = &g_host_rx_channels[source];
+  channel = &g_comm_pc_channels[source];
 
   if (channel->uart == NULL)
   {
-    channel->last_status = HOST_RX_STATUS_NOT_READY;
+    channel->last_status = comm_pc_STATUS_NOT_READY;
     return channel->last_status;
   }
 
   if (HAL_UARTEx_ReceiveToIdle_DMA(channel->uart,
                                    channel->dma_buffer,
-                                   HOST_RX_DMA_BUFFER_SIZE) != HAL_OK)
+                                   comm_pc_DMA_BUFFER_SIZE) != HAL_OK)
   {
-    channel->last_status = HOST_RX_STATUS_RX_ERROR;
+    channel->last_status = comm_pc_STATUS_RX_ERROR;
     return channel->last_status;
   }
 
@@ -89,7 +89,7 @@ static HostRx_Status_t HostRx_StartDmaReceive(HostRx_Source_t source)
   }
 
   channel->dma_last_pos = 0U;
-  channel->last_status = HOST_RX_STATUS_OK;
+  channel->last_status = comm_pc_STATUS_OK;
   return channel->last_status;
 }
 
@@ -115,7 +115,7 @@ static void HostRx_AppendReceivedData(HostRx_Source_t source, const uint8_t *dat
   HostRx_Channel_t *channel;
   uint16_t copy_length;
 
-  if ((source >= HOST_RX_SOURCE_COUNT) || (data == NULL) || (length == 0U))
+  if ((source >= comm_pc_SOURCE_COUNT) || (data == NULL) || (length == 0U))
   {
     return;
   }
@@ -126,16 +126,16 @@ static void HostRx_AppendReceivedData(HostRx_Source_t source, const uint8_t *dat
    */
   HostProtocol_OnBytes((HostProtocol_Source_t)source, data, length);
 
-  channel = &g_host_rx_channels[source];
+  channel = &g_comm_pc_channels[source];
 
-  if (channel->print_length >= HOST_RX_PRINT_BUFFER_SIZE)
+  if (channel->print_length >= comm_pc_PRINT_BUFFER_SIZE)
   {
     ++channel->overflow_count;
-    channel->last_status = HOST_RX_STATUS_OVERFLOW;
+    channel->last_status = comm_pc_STATUS_OVERFLOW;
     return;
   }
 
-  copy_length = (uint16_t)(HOST_RX_PRINT_BUFFER_SIZE - channel->print_length);
+  copy_length = (uint16_t)(comm_pc_PRINT_BUFFER_SIZE - channel->print_length);
   if (copy_length > length)
   {
     copy_length = length;
@@ -148,7 +148,7 @@ static void HostRx_AppendReceivedData(HostRx_Source_t source, const uint8_t *dat
   if (copy_length < length)
   {
     ++channel->overflow_count;
-    channel->last_status = HOST_RX_STATUS_OVERFLOW;
+    channel->last_status = comm_pc_STATUS_OVERFLOW;
   }
 }
 
@@ -157,16 +157,16 @@ static void HostRx_HandleDmaRxEvent(HostRx_Source_t source, uint16_t size)
   HostRx_Channel_t *channel;
   uint16_t current_pos = size;
 
-  if (source >= HOST_RX_SOURCE_COUNT)
+  if (source >= comm_pc_SOURCE_COUNT)
   {
     return;
   }
 
-  channel = &g_host_rx_channels[source];
+  channel = &g_comm_pc_channels[source];
 
-  if (current_pos > HOST_RX_DMA_BUFFER_SIZE)
+  if (current_pos > comm_pc_DMA_BUFFER_SIZE)
   {
-    current_pos = HOST_RX_DMA_BUFFER_SIZE;
+    current_pos = comm_pc_DMA_BUFFER_SIZE;
   }
 
   if (current_pos == channel->dma_last_pos)
@@ -186,19 +186,19 @@ static void HostRx_HandleDmaRxEvent(HostRx_Source_t source, uint16_t size)
     /* 环形缓冲区回绕：先取尾部，再取头部。 */
     HostRx_AppendReceivedData(source,
                               &channel->dma_buffer[channel->dma_last_pos],
-                              (uint16_t)(HOST_RX_DMA_BUFFER_SIZE - channel->dma_last_pos));
+                              (uint16_t)(comm_pc_DMA_BUFFER_SIZE - channel->dma_last_pos));
     if (current_pos > 0U)
     {
       HostRx_AppendReceivedData(source, &channel->dma_buffer[0], current_pos);
     }
   }
 
-  channel->dma_last_pos = (current_pos == HOST_RX_DMA_BUFFER_SIZE) ? 0U : current_pos;
+  channel->dma_last_pos = (current_pos == comm_pc_DMA_BUFFER_SIZE) ? 0U : current_pos;
 }
 
 static void HostRx_PrintChannel(HostRx_Channel_t *channel)
 {
-  uint8_t local_buffer[HOST_RX_PRINT_BUFFER_SIZE];
+  uint8_t local_buffer[comm_pc_PRINT_BUFFER_SIZE];
   uint16_t local_length;
   uint32_t overflow_count;
   uint32_t error_code;
@@ -213,9 +213,9 @@ static void HostRx_PrintChannel(HostRx_Channel_t *channel)
   /* 将中断侧累积的打印数据搬到局部缓冲，随后立即恢复中断。 */
   error_code = channel->uart_error_code;
   local_length = channel->print_length;
-  if (local_length > HOST_RX_PRINT_BUFFER_SIZE)
+  if (local_length > comm_pc_PRINT_BUFFER_SIZE)
   {
-    local_length = HOST_RX_PRINT_BUFFER_SIZE;
+    local_length = comm_pc_PRINT_BUFFER_SIZE;
   }
   memcpy(local_buffer, channel->print_buffer, local_length);
   overflow_count = channel->overflow_count;
@@ -281,53 +281,53 @@ static void HostRx_PrintChannel(HostRx_Channel_t *channel)
 
 HostRx_Status_t HostRx_InitPc(UART_HandleTypeDef *huart)
 {
-  HostRx_Channel_t *channel = &g_host_rx_channels[HOST_RX_SOURCE_PC];
+  HostRx_Channel_t *channel = &g_comm_pc_channels[comm_pc_SOURCE_PC];
 
   if (huart == NULL)
   {
-    channel->last_status = HOST_RX_STATUS_INVALID_PARAM;
+    channel->last_status = comm_pc_STATUS_INVALID_PARAM;
     return channel->last_status;
   }
 
   channel->uart = huart;
   HostRx_ResetChannel(channel);
   /* PC 调试口也注册到协议层，便于用串口助手验证 0x5A 0xA5 帧。 */
-  HostProtocol_RegisterSource(HOST_PROTOCOL_SOURCE_PC, huart);
-  return HostRx_StartDmaReceive(HOST_RX_SOURCE_PC);
+  HostProtocol_RegisterSource(comm_protocol_SOURCE_PC, huart);
+  return HostRx_StartDmaReceive(comm_pc_SOURCE_PC);
 }
 
 HostRx_Status_t HostRx_InitJetson(UART_HandleTypeDef *huart)
 {
-  HostRx_Channel_t *channel = &g_host_rx_channels[HOST_RX_SOURCE_JETSON];
+  HostRx_Channel_t *channel = &g_comm_pc_channels[comm_pc_SOURCE_JETSON];
 
   if (huart == NULL)
   {
-    channel->last_status = HOST_RX_STATUS_INVALID_PARAM;
+    channel->last_status = comm_pc_STATUS_INVALID_PARAM;
     return channel->last_status;
   }
 
   channel->uart = huart;
   HostRx_ResetChannel(channel);
   /* Jetson 是正式上位机入口，ACK 会从 huart6 回发。 */
-  HostProtocol_RegisterSource(HOST_PROTOCOL_SOURCE_JETSON, huart);
-  return HostRx_StartDmaReceive(HOST_RX_SOURCE_JETSON);
+  HostProtocol_RegisterSource(comm_protocol_SOURCE_JETSON, huart);
+  return HostRx_StartDmaReceive(comm_pc_SOURCE_JETSON);
 }
 
 void HostRx_Poll(void)
 {
   /* 先执行正式协议命令，再输出原始收包日志，方便观察命令和 ACK。 */
   HostProtocol_Poll();
-  HostRx_PrintChannel(&g_host_rx_channels[HOST_RX_SOURCE_PC]);
-  HostRx_PrintChannel(&g_host_rx_channels[HOST_RX_SOURCE_JETSON]);
+  HostRx_PrintChannel(&g_comm_pc_channels[comm_pc_SOURCE_PC]);
+  HostRx_PrintChannel(&g_comm_pc_channels[comm_pc_SOURCE_JETSON]);
 }
 
 void HostRx_OnUartRxEvent(UART_HandleTypeDef *huart, uint16_t size)
 {
   HostRx_Source_t source;
 
-  for (source = HOST_RX_SOURCE_PC; source < HOST_RX_SOURCE_COUNT; ++source)
+  for (source = comm_pc_SOURCE_PC; source < comm_pc_SOURCE_COUNT; ++source)
   {
-    HostRx_Channel_t *channel = &g_host_rx_channels[source];
+    HostRx_Channel_t *channel = &g_comm_pc_channels[source];
     if ((channel->uart != NULL) && (huart == channel->uart))
     {
       HostRx_HandleDmaRxEvent(source, size);
@@ -338,32 +338,32 @@ void HostRx_OnUartRxEvent(UART_HandleTypeDef *huart, uint16_t size)
 
 void HostRx_OnUartError(UART_HandleTypeDef *huart)
 {
-  HostRx_Channel_t *pc_channel = &g_host_rx_channels[HOST_RX_SOURCE_PC];
-  HostRx_Channel_t *jetson_channel = &g_host_rx_channels[HOST_RX_SOURCE_JETSON];
+  HostRx_Channel_t *pc_channel = &g_comm_pc_channels[comm_pc_SOURCE_PC];
+  HostRx_Channel_t *jetson_channel = &g_comm_pc_channels[comm_pc_SOURCE_JETSON];
 
   if ((pc_channel->uart != NULL) && (huart == pc_channel->uart))
   {
     pc_channel->uart_error_code = huart->ErrorCode;
     pc_channel->error_ready = 1U;
-    pc_channel->last_status = HOST_RX_STATUS_RX_ERROR;
-    (void)HostRx_StartDmaReceive(HOST_RX_SOURCE_PC);
+    pc_channel->last_status = comm_pc_STATUS_RX_ERROR;
+    (void)HostRx_StartDmaReceive(comm_pc_SOURCE_PC);
   }
 
   if ((jetson_channel->uart != NULL) && (huart == jetson_channel->uart))
   {
     jetson_channel->uart_error_code = huart->ErrorCode;
     jetson_channel->error_ready = 1U;
-    jetson_channel->last_status = HOST_RX_STATUS_RX_ERROR;
-    (void)HostRx_StartDmaReceive(HOST_RX_SOURCE_JETSON);
+    jetson_channel->last_status = comm_pc_STATUS_RX_ERROR;
+    (void)HostRx_StartDmaReceive(comm_pc_SOURCE_JETSON);
   }
 }
 
 HostRx_Status_t HostRx_GetLastStatus(HostRx_Source_t source)
 {
-  if (source >= HOST_RX_SOURCE_COUNT)
+  if (source >= comm_pc_SOURCE_COUNT)
   {
-    return HOST_RX_STATUS_INVALID_PARAM;
+    return comm_pc_STATUS_INVALID_PARAM;
   }
 
-  return g_host_rx_channels[source].last_status;
+  return g_comm_pc_channels[source].last_status;
 }

@@ -1,4 +1,4 @@
-#include "ops_sensor.h"
+#include "sensor_ops.h"
 
 #define OPS_FRAME_HEADER_FIRST   ((uint8_t)0x0DU)
 #define OPS_FRAME_HEADER_SECOND  ((uint8_t)0x0AU)
@@ -267,4 +267,9 @@ OPS_Status_t OPS_GetPose(OPS_Pose_t *pose)
 
   OPS_CopyPose(pose);
   return (pose->valid != 0U) ? OPS_STATUS_OK : OPS_STATUS_NO_DATA;
+}
+
+const volatile OPS_Pose_t *OPS_GetPoseRef(void)
+{
+  return &g_ops_pose;
 }

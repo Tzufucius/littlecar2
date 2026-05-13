@@ -1,7 +1,7 @@
-﻿#include "Emm_V5.h"
+﻿#include "drive_emm.h"
 
 /**********************************************************
-***	Emm_V5.0步进闭环控制例程
+***	drive_emm.0步进闭环控制例程
 ***	编写作者：ZHANGDATOU
 ***	技术支持：张大头闭环伺服
 ***	淘宝店铺：https://zhangdatou.taobao.com
@@ -19,18 +19,18 @@ __IO uint16_t MMCL_count = 0, MMCL_cmd[MMCL_LEN] = {0};
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Trig_Encoder_Cal(uint8_t addr)
+void drive_emm_Trig_Encoder_Cal(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x06;                       // 功能码
   cmd[2] =  0x45;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-	HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 4);
+	HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 4);
 }
 
 /**
@@ -38,18 +38,18 @@ void Emm_V5_Trig_Encoder_Cal(uint8_t addr)
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Reset_Motor(uint8_t addr)
+void drive_emm_Reset_Motor(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x08;                       // 功能码
   cmd[2] =  0x97;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-	HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 4);
+	HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 4);
 }
 
 /**
@@ -57,18 +57,18 @@ void Emm_V5_Reset_Motor(uint8_t addr)
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Reset_CurPos_To_Zero(uint8_t addr)
+void drive_emm_Reset_CurPos_To_Zero(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x0A;                       // 功能码
   cmd[2] =  0x6D;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-	HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 4);
+	HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 4);
 }
 
 /**
@@ -76,18 +76,18 @@ void Emm_V5_Reset_CurPos_To_Zero(uint8_t addr)
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Reset_Clog_Pro(uint8_t addr)
+void drive_emm_Reset_Clog_Pro(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x0E;                       // 功能码
   cmd[2] =  0x52;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 4);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 4);
 }
 
 /**
@@ -95,18 +95,18 @@ void Emm_V5_Reset_Clog_Pro(uint8_t addr)
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Restore_Motor(uint8_t addr)
+void drive_emm_Restore_Motor(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x0F;                       // 功能码
   cmd[2] =  0x5F;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-	HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 4);
+	HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 4);
 }
 
 /**********************************************************
@@ -117,16 +117,16 @@ void Emm_V5_Restore_Motor(uint8_t addr)
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Multi_Motor_Cmd(uint8_t addr)
+void drive_emm_Multi_Motor_Cmd(uint8_t addr)
 {
   uint16_t i = 0, j = 0, len = 0; __IO static uint8_t cmd[MMCL_LEN] = {0};
-  
+
 	// 多电机命令长度大于0
 	if(MMCL_count > 0)
 	{
 		// 多电机命令的总字节数
 		len = MMCL_count + 5;
-		
+
 		// 装载命令
 		cmd[0] = addr;                       // 地址
 		cmd[1] = 0xAA;                       // 功能码
@@ -134,9 +134,9 @@ void Emm_V5_Multi_Motor_Cmd(uint8_t addr)
 		cmd[3] = (uint8_t)(len); 		 				 // 总字节数低8位
 		for(i=0,j=4; i < MMCL_count; i++,j++) { cmd[j] = MMCL_cmd[i]; }
 		cmd[j] = 0x6B; ++j;                  // 校验字节
-		
+
 		// 发送命令
-		HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, j); MMCL_count = 0;
+		HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, j); MMCL_count = 0;
 	}
 	else
 	{
@@ -151,10 +151,10 @@ void Emm_V5_Multi_Motor_Cmd(uint8_t addr)
   * @param    snF   ：多机同步标志 ，false为不启用，true为启用
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_En_Control(uint8_t addr, bool state, bool snF)
+void drive_emm_En_Control(uint8_t addr, bool state, bool snF)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0xF3;                       // 功能码
@@ -162,9 +162,9 @@ void Emm_V5_En_Control(uint8_t addr, bool state, bool snF)
   cmd[3] =  (uint8_t)state;             // 使能状态
   cmd[4] =  snF;                        // 多机同步运动标志
   cmd[5] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 6);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 6);
 }
 
 /**
@@ -176,7 +176,7 @@ void Emm_V5_En_Control(uint8_t addr, bool state, bool snF)
   * @param    snF ：多机同步标志，false为不启用，true为启用
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Vel_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, bool snF)
+void drive_emm_Vel_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, bool snF)
 {
   __IO static uint8_t cmd[16] = {0};
 
@@ -189,9 +189,9 @@ void Emm_V5_Vel_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, bo
   cmd[5] =  acc;                        // 加速度，注意：0是直接启动
   cmd[6] =  snF;                        // 多机同步运动标志
   cmd[7] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 8);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 8);
 }
 
 /**
@@ -205,7 +205,7 @@ void Emm_V5_Vel_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, bo
   * @param    snF ：多机同步标志 ，false为不启用，true为启用
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Pos_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, uint32_t clk, bool raF, bool snF)
+void drive_emm_Pos_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, uint32_t clk, bool raF, bool snF)
 {
   __IO static uint8_t cmd[16] = {0};
 
@@ -214,7 +214,7 @@ void Emm_V5_Pos_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, ui
   cmd[1]  =  0xFD;                      // 功能码
   cmd[2]  =  dir;                       // 方向
   cmd[3]  =  (uint8_t)(vel >> 8);       // 速度(RPM)高8位字节
-  cmd[4]  =  (uint8_t)(vel >> 0);       // 速度(RPM)低8位字节 
+  cmd[4]  =  (uint8_t)(vel >> 0);       // 速度(RPM)低8位字节
   cmd[5]  =  acc;                       // 加速度，注意：0是直接启动
   cmd[6]  =  (uint8_t)(clk >> 24);      // 脉冲数(bit24 - bit31)
   cmd[7]  =  (uint8_t)(clk >> 16);      // 脉冲数(bit16 - bit23)
@@ -223,9 +223,9 @@ void Emm_V5_Pos_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, ui
   cmd[10] =  raF;                       // 相位/绝对标志，false为相对运动，true为绝对值运动
   cmd[11] =  snF;                       // 多机同步运动标志，false为不启用，true为启用
   cmd[12] =  0x6B;                      // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 13);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 13);
 }
 
 /**
@@ -234,19 +234,19 @@ void Emm_V5_Pos_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, ui
   * @param    snF   ：多机同步标志，false为不启用，true为启用
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Stop_Now(uint8_t addr, bool snF)
+void drive_emm_Stop_Now(uint8_t addr, bool snF)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0xFE;                       // 功能码
   cmd[2] =  0x98;                       // 辅助码
   cmd[3] =  snF;                        // 多机同步运动标志
   cmd[4] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 5);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 5);
 }
 
 /**
@@ -254,18 +254,18 @@ void Emm_V5_Stop_Now(uint8_t addr, bool snF)
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Synchronous_motion(uint8_t addr)
+void drive_emm_Synchronous_motion(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0xFF;                       // 功能码
   cmd[2] =  0x66;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 4);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 4);
 }
 
 /**********************************************************
@@ -277,19 +277,19 @@ void Emm_V5_Synchronous_motion(uint8_t addr)
   * @param    svF   ：是否存储标志，false为不存储，true为存储
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Origin_Set_O(uint8_t addr, bool svF)
+void drive_emm_Origin_Set_O(uint8_t addr, bool svF)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x93;                       // 功能码
   cmd[2] =  0x88;                       // 辅助码
   cmd[3] =  svF;                        // 是否存储标志，false为不存储，true为存储
   cmd[4] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 5);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 5);
 }
 
 /**
@@ -299,19 +299,19 @@ void Emm_V5_Origin_Set_O(uint8_t addr, bool svF)
   * @param    snF   ：多机同步标志，false为不启用，true为启用
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Origin_Trigger_Return(uint8_t addr, uint8_t o_mode, bool snF)
+void drive_emm_Origin_Trigger_Return(uint8_t addr, uint8_t o_mode, bool snF)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x9A;                       // 功能码
   cmd[2] =  o_mode;                     // 回零模式，0为单圈就近回零，1为单圈方向回零，2为多圈无限位碰撞回零，3为多圈有限位开关回零
   cmd[3] =  snF;                        // 多机同步运动标志，false为不启用，true为启用
   cmd[4] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 5);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 5);
 }
 
 /**
@@ -319,18 +319,18 @@ void Emm_V5_Origin_Trigger_Return(uint8_t addr, uint8_t o_mode, bool snF)
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Origin_Interrupt(uint8_t addr)
+void drive_emm_Origin_Interrupt(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x9C;                       // 功能码
   cmd[2] =  0x48;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 4);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 4);
 }
 
 /**
@@ -338,17 +338,17 @@ void Emm_V5_Origin_Interrupt(uint8_t addr)
   * @param    addr     ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Origin_Read_Params(uint8_t addr)
+void drive_emm_Origin_Read_Params(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x22;                       // 功能码
   cmd[2] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 3);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 3);
 }
 
 /**
@@ -365,10 +365,10 @@ void Emm_V5_Origin_Read_Params(uint8_t addr)
   * @param    potF   ：上电自动触发回零，false为不使能，true为使能
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Origin_Modify_Params(uint8_t addr, bool svF, uint8_t o_mode, uint8_t o_dir, uint16_t o_vel, uint32_t o_tm, uint16_t sl_vel, uint16_t sl_ma, uint16_t sl_ms, bool potF)
+void drive_emm_Origin_Modify_Params(uint8_t addr, bool svF, uint8_t o_mode, uint8_t o_dir, uint16_t o_vel, uint32_t o_tm, uint16_t sl_vel, uint16_t sl_ma, uint16_t sl_ms, bool potF)
 {
   __IO static uint8_t cmd[32] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x4C;                       // 功能码
@@ -377,22 +377,22 @@ void Emm_V5_Origin_Modify_Params(uint8_t addr, bool svF, uint8_t o_mode, uint8_t
   cmd[4] =  o_mode;                     // 回零模式，0为单圈就近回零，1为单圈方向回零，2为多圈无限位碰撞回零，3为多圈有限位开关回零
   cmd[5] =  o_dir;                      // 回零方向
   cmd[6]  =  (uint8_t)(o_vel >> 8);     // 回零速度(RPM)高8位字节
-  cmd[7]  =  (uint8_t)(o_vel >> 0);     // 回零速度(RPM)低8位字节 
+  cmd[7]  =  (uint8_t)(o_vel >> 0);     // 回零速度(RPM)低8位字节
   cmd[8]  =  (uint8_t)(o_tm >> 24);     // 回零超时时间(bit24 - bit31)
   cmd[9]  =  (uint8_t)(o_tm >> 16);     // 回零超时时间(bit16 - bit23)
   cmd[10] =  (uint8_t)(o_tm >> 8);      // 回零超时时间(bit8  - bit15)
   cmd[11] =  (uint8_t)(o_tm >> 0);      // 回零超时时间(bit0  - bit7 )
   cmd[12] =  (uint8_t)(sl_vel >> 8);    // 无限位碰撞回零检测转速(RPM)高8位字节
-  cmd[13] =  (uint8_t)(sl_vel >> 0);    // 无限位碰撞回零检测转速(RPM)低8位字节 
+  cmd[13] =  (uint8_t)(sl_vel >> 0);    // 无限位碰撞回零检测转速(RPM)低8位字节
   cmd[14] =  (uint8_t)(sl_ma >> 8);     // 无限位碰撞回零检测电流(Ma)高8位字节
-  cmd[15] =  (uint8_t)(sl_ma >> 0);     // 无限位碰撞回零检测电流(Ma)低8位字节 
+  cmd[15] =  (uint8_t)(sl_ma >> 0);     // 无限位碰撞回零检测电流(Ma)低8位字节
   cmd[16] =  (uint8_t)(sl_ms >> 8);     // 无限位碰撞回零检测时间(Ms)高8位字节
   cmd[17] =  (uint8_t)(sl_ms >> 0);     // 无限位碰撞回零检测时间(Ms)低8位字节
   cmd[18] =  potF;                      // 上电自动触发回零，false为不使能，true为使能
   cmd[19] =  0x6B;                      // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 20);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 20);
 }
 
 /**********************************************************
@@ -405,10 +405,10 @@ void Emm_V5_Origin_Modify_Params(uint8_t addr, bool svF, uint8_t o_mode, uint8_t
 	* @param    time_ms ：定时时间
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Auto_Return_Sys_Params_Timed(uint8_t addr, SysParams_t s, uint16_t time_ms)
+void drive_emm_Auto_Return_Sys_Params_Timed(uint8_t addr, SysParams_t s, uint16_t time_ms)
 {
   uint8_t i = 0; __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[i] = addr; ++i;                   // 地址
 
@@ -438,14 +438,14 @@ void Emm_V5_Auto_Return_Sys_Params_Timed(uint8_t addr, SysParams_t s, uint16_t t
 		case S_PIN  : cmd[i] = 0x3D; ++i; break;	// 读取引脚状态（Y42）
     default: break;
   }
-	
+
 	cmd[i] = (uint8_t)(time_ms >> 8);  ++i;	// 定时时间
 	cmd[i] = (uint8_t)(time_ms >> 0);  ++i;
 
   cmd[i] = 0x6B; ++i;                   	// 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, i);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, i);
 }
 
 /**
@@ -454,10 +454,10 @@ void Emm_V5_Auto_Return_Sys_Params_Timed(uint8_t addr, SysParams_t s, uint16_t t
   * @param    s     ：系统参数类型
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Read_Sys_Params(uint8_t addr, SysParams_t s)
+void drive_emm_Read_Sys_Params(uint8_t addr, SysParams_t s)
 {
   uint8_t i = 0; __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[i] = addr; ++i;                   // 地址
 
@@ -485,9 +485,9 @@ void Emm_V5_Read_Sys_Params(uint8_t addr, SysParams_t s)
   }
 
   cmd[i] = 0x6B; ++i;                   // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, i);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, i);
 }
 
 /**********************************************************
@@ -500,10 +500,10 @@ void Emm_V5_Read_Sys_Params(uint8_t addr, SysParams_t s)
   * @param    id			 ：默认电机ID为1，可修改为1-255，0为广播地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_Motor_ID(uint8_t addr, bool svF, uint8_t id)
+void drive_emm_Modify_Motor_ID(uint8_t addr, bool svF, uint8_t id)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0xAE;                       // 功能码
@@ -511,9 +511,9 @@ void Emm_V5_Modify_Motor_ID(uint8_t addr, bool svF, uint8_t id)
   cmd[3] =  svF;                        // 是否存储标志，false为不存储，true为存储
   cmd[4] =  id;                  				// 默认电机ID为1，可修改为1-255，0为广播地址
   cmd[5] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 6);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 6);
 }
 
 /**
@@ -523,10 +523,10 @@ void Emm_V5_Modify_Motor_ID(uint8_t addr, bool svF, uint8_t id)
   * @param    mstep		 ：默认细分为16，可修改为1-2556，0为256细分
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_MicroStep(uint8_t addr, bool svF, uint8_t mstep)
+void drive_emm_Modify_MicroStep(uint8_t addr, bool svF, uint8_t mstep)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x84;                       // 功能码
@@ -534,9 +534,9 @@ void Emm_V5_Modify_MicroStep(uint8_t addr, bool svF, uint8_t mstep)
   cmd[3] =  svF;                        // 是否存储标志，false为不存储，true为存储
   cmd[4] =  mstep;                 	 		// 默认细分为16，可修改为1-2556，0为256细分
   cmd[5] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 6);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 6);
 }
 
 /**
@@ -545,18 +545,18 @@ void Emm_V5_Modify_MicroStep(uint8_t addr, bool svF, uint8_t mstep)
   * @param    pdf		 	 ：掉电标志
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_PDFlag(uint8_t addr, bool pdf)
+void drive_emm_Modify_PDFlag(uint8_t addr, bool pdf)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x50;                       // 功能码
   cmd[2] =  pdf;                 	 			// 掉电标志
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 4);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 4);
 }
 
 /**
@@ -564,17 +564,17 @@ void Emm_V5_Modify_PDFlag(uint8_t addr, bool pdf)
   * @param    addr     ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Read_Opt_Param_Sta(uint8_t addr)
+void drive_emm_Read_Opt_Param_Sta(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x1A;                       // 功能码
   cmd[2] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 3);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 3);
 }
 
 /**
@@ -584,12 +584,12 @@ void Emm_V5_Read_Opt_Param_Sta(uint8_t addr)
   * @param    mottype	 ：电机类型，默认为0，0表示1.8°步进电机，1表示0.9°步进电机
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_Motor_Type(uint8_t addr, bool svF, bool mottype)
+void drive_emm_Modify_Motor_Type(uint8_t addr, bool svF, bool mottype)
 {
   __IO static uint8_t cmd[16] = {0}; uint8_t MotType = 0;
-  
+
 	if(mottype) { MotType = 25; } else { MotType = 50; }
-	
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0xD7;                       // 功能码
@@ -597,9 +597,9 @@ void Emm_V5_Modify_Motor_Type(uint8_t addr, bool svF, bool mottype)
   cmd[3] =  svF;                        // 是否存储标志，false为不存储，true为存储
   cmd[4] =  MotType;                 	 	// 电机类型，0表示0.9°步进电机，1表示1.8°步进电机
   cmd[5] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 6);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 6);
 }
 
 /**
@@ -609,10 +609,10 @@ void Emm_V5_Modify_Motor_Type(uint8_t addr, bool svF, bool mottype)
   * @param    fwtype	 ：固件类型，默认为0，0为X固件，1为Emm固件
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_Firmware_Type(uint8_t addr, bool svF, bool fwtype)
+void drive_emm_Modify_Firmware_Type(uint8_t addr, bool svF, bool fwtype)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0xD5;                       // 功能码
@@ -620,9 +620,9 @@ void Emm_V5_Modify_Firmware_Type(uint8_t addr, bool svF, bool fwtype)
   cmd[3] =  svF;                        // 是否存储标志，false为不存储，true为存储
   cmd[4] =  fwtype;                 	 	// 电机类型，25表示0.9°步进电机，50表示1.8°步进电机
   cmd[5] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 6);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 6);
 }
 
 /**
@@ -632,10 +632,10 @@ void Emm_V5_Modify_Firmware_Type(uint8_t addr, bool svF, bool fwtype)
   * @param    ctrl_mode：控制模式，默认为1,0为开环模式，1为闭环FOC模式
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_Ctrl_Mode(uint8_t addr, bool svF, bool ctrl_mode)
+void drive_emm_Modify_Ctrl_Mode(uint8_t addr, bool svF, bool ctrl_mode)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x46;                       // 功能码
@@ -643,9 +643,9 @@ void Emm_V5_Modify_Ctrl_Mode(uint8_t addr, bool svF, bool ctrl_mode)
   cmd[3] =  svF;                        // 是否存储标志，false为不存储，true为存储
   cmd[4] =  ctrl_mode;                  // 控制模式，默认为1,0为开环模式，1为闭环FOC模式
   cmd[5] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 6);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 6);
 }
 
 /**
@@ -655,10 +655,10 @@ void Emm_V5_Modify_Ctrl_Mode(uint8_t addr, bool svF, bool ctrl_mode)
   * @param    dir			 ：电机运动正方向，默认为CW，0为CW（顺时针方向），1为CCW
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_Motor_Dir(uint8_t addr, bool svF, bool dir)
+void drive_emm_Modify_Motor_Dir(uint8_t addr, bool svF, bool dir)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0xD4;                       // 功能码
@@ -666,9 +666,9 @@ void Emm_V5_Modify_Motor_Dir(uint8_t addr, bool svF, bool dir)
   cmd[3] =  svF;                        // 是否存储标志，false为不存储，true为存储
   cmd[4] =  dir;                  			// 电机运动正方向，默认为CW，0为CW（顺时针方向），1为CCW
   cmd[5] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 6);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 6);
 }
 
 /**
@@ -678,10 +678,10 @@ void Emm_V5_Modify_Motor_Dir(uint8_t addr, bool svF, bool dir)
   * @param    lock		 ：锁定按键功能，默认为Disable，0为Disable，1为Enable
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_Lock_Btn(uint8_t addr, bool svF, bool lock)
+void drive_emm_Modify_Lock_Btn(uint8_t addr, bool svF, bool lock)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0xD0;                       // 功能码
@@ -689,9 +689,9 @@ void Emm_V5_Modify_Lock_Btn(uint8_t addr, bool svF, bool lock)
   cmd[3] =  svF;                        // 是否存储标志，false为不存储，true为存储
   cmd[4] =  lock;                  			// 锁定按键功能，默认为Disable，0为Disable），1为Enable
   cmd[5] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 6);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 6);
 }
 
 /**
@@ -701,10 +701,10 @@ void Emm_V5_Modify_Lock_Btn(uint8_t addr, bool svF, bool lock)
   * @param    s_vel		 ：命令速度值是否缩小10倍输入，默认为Disable，0为Disable，1为Enable
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_S_Vel(uint8_t addr, bool svF, bool s_vel)
+void drive_emm_Modify_S_Vel(uint8_t addr, bool svF, bool s_vel)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x4F;                       // 功能码
@@ -712,9 +712,9 @@ void Emm_V5_Modify_S_Vel(uint8_t addr, bool svF, bool s_vel)
   cmd[3] =  svF;                        // 是否存储标志，false为不存储，true为存储
   cmd[4] =  s_vel;                  		// 命令速度值是否缩小10倍输入，默认为Disable，0为Disable，1为Enable
   cmd[5] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 6);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 6);
 }
 
 /**
@@ -724,10 +724,10 @@ void Emm_V5_Modify_S_Vel(uint8_t addr, bool svF, bool s_vel)
   * @param    om_ma 	 ：开环模式工作电流，单位mA
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_OM_mA(uint8_t addr, bool svF, uint16_t om_ma)
+void drive_emm_Modify_OM_mA(uint8_t addr, bool svF, uint16_t om_ma)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x44;                       // 功能码
@@ -736,9 +736,9 @@ void Emm_V5_Modify_OM_mA(uint8_t addr, bool svF, uint16_t om_ma)
   cmd[4] =  (uint8_t)(om_ma >> 8);			// 开环模式工作电流，单位mA
 	cmd[5] =  (uint8_t)(om_ma >> 0);
   cmd[6] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 7);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 7);
 }
 
 /**
@@ -748,10 +748,10 @@ void Emm_V5_Modify_OM_mA(uint8_t addr, bool svF, uint16_t om_ma)
   * @param    foc_mA 	 ：闭环模式最大电流，单位mA
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_FOC_mA(uint8_t addr, bool svF, uint16_t foc_mA)
+void drive_emm_Modify_FOC_mA(uint8_t addr, bool svF, uint16_t foc_mA)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x45;                       // 功能码
@@ -760,9 +760,9 @@ void Emm_V5_Modify_FOC_mA(uint8_t addr, bool svF, uint16_t foc_mA)
   cmd[4] =  (uint8_t)(foc_mA >> 8);			// 闭环模式最大电流，单位mA
 	cmd[5] =  (uint8_t)(foc_mA >> 0);
   cmd[6] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 7);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 7);
 }
 
 /**
@@ -770,17 +770,17 @@ void Emm_V5_Modify_FOC_mA(uint8_t addr, bool svF, uint16_t foc_mA)
   * @param    addr     ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Read_PID_Params(uint8_t addr)
+void drive_emm_Read_PID_Params(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x21;                       // 功能码
   cmd[2] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 3);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 3);
 }
 
 /**
@@ -792,10 +792,10 @@ void Emm_V5_Read_PID_Params(uint8_t addr)
 	* @param    kd 	 		 ：微分系数，默认为Y42/18000
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_PID_Params(uint8_t addr, bool svF, uint32_t kp, uint32_t ki, uint32_t kd)
+void drive_emm_Modify_PID_Params(uint8_t addr, bool svF, uint32_t kp, uint32_t ki, uint32_t kd)
 {
   __IO static uint8_t cmd[20] = {0};
-  
+
   // 装载命令
   cmd[0]  =  addr;                      // 地址
   cmd[1]  =  0x4A;                      // 功能码
@@ -814,9 +814,9 @@ void Emm_V5_Modify_PID_Params(uint8_t addr, bool svF, uint32_t kp, uint32_t ki, 
 	cmd[14] =  (uint8_t)(kd >> 8);
 	cmd[15] =  (uint8_t)(kd >> 0);
   cmd[16] =  0x6B;                      // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 17);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 17);
 }
 
 /**
@@ -824,18 +824,18 @@ void Emm_V5_Modify_PID_Params(uint8_t addr, bool svF, uint32_t kp, uint32_t ki, 
   * @param    addr     ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Read_DMX512_Params(uint8_t addr)
+void drive_emm_Read_DMX512_Params(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x49;                       // 功能码
 	cmd[2] =  0x78;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 4);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 4);
 }
 
 /**
@@ -851,10 +851,10 @@ void Emm_V5_Read_DMX512_Params(uint8_t addr)
 	* @param    pos_step	：双通道模式运动步长，默认值为 100， 即电机转动角度为(通道值 * 10.0)°
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_DMX512_Params(uint8_t addr, bool svF, uint16_t tch, uint8_t nch, uint8_t mode, uint16_t vel, uint16_t acc, uint16_t vel_step, uint32_t pos_step)
+void drive_emm_Modify_DMX512_Params(uint8_t addr, bool svF, uint16_t tch, uint8_t nch, uint8_t mode, uint16_t vel, uint16_t acc, uint16_t vel_step, uint32_t pos_step)
 {
   __IO static uint8_t cmd[32] = {0};
-  
+
   // 装载命令
   cmd[0]  =  addr;                      // 地址
   cmd[1]  =  0xD9;                      // 功能码
@@ -875,9 +875,9 @@ void Emm_V5_Modify_DMX512_Params(uint8_t addr, bool svF, uint16_t tch, uint8_t n
   cmd[16] =  (uint8_t)(pos_step >> 8);
   cmd[17] =  (uint8_t)(pos_step >> 0);
   cmd[18] =  0x6B;                      // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 19);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 19);
 }
 
 /**
@@ -885,17 +885,17 @@ void Emm_V5_Modify_DMX512_Params(uint8_t addr, bool svF, uint16_t tch, uint8_t n
   * @param    addr     ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Read_Pos_Window(uint8_t addr)
+void drive_emm_Read_Pos_Window(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x41;                       // 功能码
   cmd[2] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 3);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 3);
 }
 
 /**
@@ -905,10 +905,10 @@ void Emm_V5_Read_Pos_Window(uint8_t addr)
   * @param    prw 	 	 ：位置到达窗口，默认值为8，即0.8°
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_Pos_Window(uint8_t addr, bool svF, uint16_t prw)
+void drive_emm_Modify_Pos_Window(uint8_t addr, bool svF, uint16_t prw)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0xD1;                       // 功能码
@@ -917,9 +917,9 @@ void Emm_V5_Modify_Pos_Window(uint8_t addr, bool svF, uint16_t prw)
   cmd[4] =  (uint8_t)(prw >> 8);				// 位置到达窗口，默认值为8，即0.8°
 	cmd[5] =  (uint8_t)(prw >> 0);
   cmd[6] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 7);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 7);
 }
 
 /**
@@ -927,17 +927,17 @@ void Emm_V5_Modify_Pos_Window(uint8_t addr, bool svF, uint16_t prw)
   * @param    addr     ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Read_Otocp(uint8_t addr)
+void drive_emm_Read_Otocp(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x13;                       // 功能码
   cmd[2] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 3);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 3);
 }
 
 /**
@@ -949,10 +949,10 @@ void Emm_V5_Read_Otocp(uint8_t addr)
 	* @param    time_ms  ：过热过流检测时间，默认1000ms
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_Otocp(uint8_t addr, bool svF, uint16_t otp, uint16_t ocp, uint16_t time_ms)
+void drive_emm_Modify_Otocp(uint8_t addr, bool svF, uint16_t otp, uint16_t ocp, uint16_t time_ms)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0]  =  addr;                      // 地址
   cmd[1]  =  0xD3;                      // 功能码
@@ -965,9 +965,9 @@ void Emm_V5_Modify_Otocp(uint8_t addr, bool svF, uint16_t otp, uint16_t ocp, uin
 	cmd[8]  =  (uint8_t)(time_ms >> 8);		// 过热过流检测时间
 	cmd[9]  =  (uint8_t)(time_ms >> 0);
   cmd[10] =  0x6B;                      // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 11);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 11);
 }
 
 /**
@@ -975,17 +975,17 @@ void Emm_V5_Modify_Otocp(uint8_t addr, bool svF, uint16_t otp, uint16_t ocp, uin
   * @param    addr     ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Read_Heart_Protect(uint8_t addr)
+void drive_emm_Read_Heart_Protect(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x16;                       // 功能码
   cmd[2] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 3);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 3);
 }
 
 /**
@@ -995,10 +995,10 @@ void Emm_V5_Read_Heart_Protect(uint8_t addr)
   * @param    hp 	 	 	 ：心跳保护时间，单位：ms
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_Heart_Protect(uint8_t addr, bool svF, uint32_t hp)
+void drive_emm_Modify_Heart_Protect(uint8_t addr, bool svF, uint32_t hp)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0]  =  addr;                      // 地址
   cmd[1]  =  0x68;                      // 功能码
@@ -1009,9 +1009,9 @@ void Emm_V5_Modify_Heart_Protect(uint8_t addr, bool svF, uint32_t hp)
 	cmd[6]  =  (uint8_t)(hp >> 8);
 	cmd[7]  =  (uint8_t)(hp >> 0);
   cmd[8]  =  0x6B;                      // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 9);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 9);
 }
 
 /**
@@ -1019,17 +1019,17 @@ void Emm_V5_Modify_Heart_Protect(uint8_t addr, bool svF, uint32_t hp)
   * @param    addr     ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Read_Integral_Limit(uint8_t addr)
+void drive_emm_Read_Integral_Limit(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x23;                       // 功能码
   cmd[2] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 3);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 3);
 }
 
 /**
@@ -1039,10 +1039,10 @@ void Emm_V5_Read_Integral_Limit(uint8_t addr)
   * @param    il 	 	 	 ：积分限幅，默认值为65535
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Modify_Integral_Limit(uint8_t addr, bool svF, uint32_t il)
+void drive_emm_Modify_Integral_Limit(uint8_t addr, bool svF, uint32_t il)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0]  =  addr;                      // 地址
   cmd[1]  =  0x4B;                      // 功能码
@@ -1053,9 +1053,9 @@ void Emm_V5_Modify_Integral_Limit(uint8_t addr, bool svF, uint32_t il)
 	cmd[6]  =  (uint8_t)(il >> 8);
 	cmd[7]  =  (uint8_t)(il >> 0);
   cmd[8]  =  0x6B;                      // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 9);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 9);
 }
 
 /**********************************************************
@@ -1066,18 +1066,18 @@ void Emm_V5_Modify_Integral_Limit(uint8_t addr, bool svF, uint32_t il)
   * @param    addr     ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Read_System_State_Params(uint8_t addr)
+void drive_emm_Read_System_State_Params(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x43;                       // 功能码
 	cmd[2] =  0x7A;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 4);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 4);
 }
 
 /**
@@ -1085,18 +1085,18 @@ void Emm_V5_Read_System_State_Params(uint8_t addr)
   * @param    addr     ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_Read_Motor_Conf_Params(uint8_t addr)
+void drive_emm_Read_Motor_Conf_Params(uint8_t addr)
 {
   __IO static uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x42;                       // 功能码
 	cmd[2] =  0x6C;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 发送命令
-  HAL_UART_Transmit_DMA(EMM_V5_UART, (uint8_t *)cmd, 4);
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 4);
 }
 
 
@@ -1104,11 +1104,11 @@ void Emm_V5_Read_Motor_Conf_Params(uint8_t addr)
 /**
 ***********************************************************
 ***********************************************************
-*** 
+***
 ***
 *** @brief	以下是把相应命令加载到Y42多电机命令上的函数（Y42）
 ***
-*** 
+***
 ***********************************************************
 ***********************************************************
 ***/
@@ -1120,16 +1120,16 @@ void Emm_V5_Read_Motor_Conf_Params(uint8_t addr)
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Trig_Encoder_Cal(uint8_t addr)
+void drive_emm_MMCL_Trig_Encoder_Cal(uint8_t addr)
 {
   uint8_t j = 0, cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x06;                       // 功能码
   cmd[2] =  0x45;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < 4; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1139,16 +1139,16 @@ void Emm_V5_MMCL_Trig_Encoder_Cal(uint8_t addr)
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Reset_Motor(uint8_t addr)
+void drive_emm_MMCL_Reset_Motor(uint8_t addr)
 {
   uint8_t j = 0, cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x08;                       // 功能码
   cmd[2] =  0x97;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < 4; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1158,16 +1158,16 @@ void Emm_V5_MMCL_Reset_Motor(uint8_t addr)
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Reset_CurPos_To_Zero(uint8_t addr)
+void drive_emm_MMCL_Reset_CurPos_To_Zero(uint8_t addr)
 {
   uint8_t j = 0, cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x0A;                       // 功能码
   cmd[2] =  0x6D;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < 4; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1177,16 +1177,16 @@ void Emm_V5_MMCL_Reset_CurPos_To_Zero(uint8_t addr)
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Reset_Clog_Pro(uint8_t addr)
+void drive_emm_MMCL_Reset_Clog_Pro(uint8_t addr)
 {
   uint8_t j = 0, cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x0E;                       // 功能码
   cmd[2] =  0x52;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < 4; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1196,16 +1196,16 @@ void Emm_V5_MMCL_Reset_Clog_Pro(uint8_t addr)
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Restore_Motor(uint8_t addr)
+void drive_emm_MMCL_Restore_Motor(uint8_t addr)
 {
   uint8_t j = 0, cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x0F;                       // 功能码
   cmd[2] =  0x5F;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < 4; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1220,10 +1220,10 @@ void Emm_V5_MMCL_Restore_Motor(uint8_t addr)
   * @param    snF   ：多机同步标志 ，false为不启用，true为启用
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_En_Control(uint8_t addr, bool state, bool snF)
+void drive_emm_MMCL_En_Control(uint8_t addr, bool state, bool snF)
 {
   uint8_t j = 0, cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0xF3;                       // 功能码
@@ -1231,7 +1231,7 @@ void Emm_V5_MMCL_En_Control(uint8_t addr, bool state, bool snF)
   cmd[3] =  (uint8_t)state;             // 使能状态
   cmd[4] =  snF;                        // 多机同步运动标志
   cmd[5] =  0x6B;                       // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < 6; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1245,7 +1245,7 @@ void Emm_V5_MMCL_En_Control(uint8_t addr, bool state, bool snF)
   * @param    snF ：多机同步标志，false为不启用，true为启用
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Vel_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, bool snF)
+void drive_emm_MMCL_Vel_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, bool snF)
 {
   uint8_t j = 0, cmd[16] = {0};
 
@@ -1258,7 +1258,7 @@ void Emm_V5_MMCL_Vel_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t ac
   cmd[5] =  acc;                        // 加速度，注意：0是直接启动
   cmd[6] =  snF;                        // 多机同步运动标志
   cmd[7] =  0x6B;                       // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < 8; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1274,7 +1274,7 @@ void Emm_V5_MMCL_Vel_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t ac
   * @param    snF ：多机同步标志 ，false为不启用，true为启用
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Pos_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, uint32_t clk, bool raF, bool snF)
+void drive_emm_MMCL_Pos_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, uint32_t clk, bool raF, bool snF)
 {
   uint8_t j = 0, cmd[16] = {0};
 
@@ -1283,7 +1283,7 @@ void Emm_V5_MMCL_Pos_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t ac
   cmd[1]  =  0xFD;                      // 功能码
   cmd[2]  =  dir;                       // 方向
   cmd[3]  =  (uint8_t)(vel >> 8);       // 速度(RPM)高8位字节
-  cmd[4]  =  (uint8_t)(vel >> 0);       // 速度(RPM)低8位字节 
+  cmd[4]  =  (uint8_t)(vel >> 0);       // 速度(RPM)低8位字节
   cmd[5]  =  acc;                       // 加速度，注意：0是直接启动
   cmd[6]  =  (uint8_t)(clk >> 24);      // 脉冲数(bit24 - bit31)
   cmd[7]  =  (uint8_t)(clk >> 16);      // 脉冲数(bit16 - bit23)
@@ -1292,7 +1292,7 @@ void Emm_V5_MMCL_Pos_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t ac
   cmd[10] =  raF;                       // 相位/绝对标志，false为相对运动，true为绝对值运动
   cmd[11] =  snF;                       // 多机同步运动标志，false为不启用，true为启用
   cmd[12] =  0x6B;                      // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < 13; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1303,17 +1303,17 @@ void Emm_V5_MMCL_Pos_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t ac
   * @param    snF   ：多机同步标志，false为不启用，true为启用
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Stop_Now(uint8_t addr, bool snF)
+void drive_emm_MMCL_Stop_Now(uint8_t addr, bool snF)
 {
   uint8_t j = 0, cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0xFE;                       // 功能码
   cmd[2] =  0x98;                       // 辅助码
   cmd[3] =  snF;                        // 多机同步运动标志
   cmd[4] =  0x6B;                       // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < 5; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1323,16 +1323,16 @@ void Emm_V5_MMCL_Stop_Now(uint8_t addr, bool snF)
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Synchronous_motion(uint8_t addr)
+void drive_emm_MMCL_Synchronous_motion(uint8_t addr)
 {
   uint8_t j = 0, cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0xFF;                       // 功能码
   cmd[2] =  0x66;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < 4; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1346,17 +1346,17 @@ void Emm_V5_MMCL_Synchronous_motion(uint8_t addr)
   * @param    svF   ：是否存储标志，false为不存储，true为存储
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Origin_Set_O(uint8_t addr, bool svF)
+void drive_emm_MMCL_Origin_Set_O(uint8_t addr, bool svF)
 {
   uint8_t j = 0, cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x93;                       // 功能码
   cmd[2] =  0x88;                       // 辅助码
   cmd[3] =  svF;                        // 是否存储标志，false为不存储，true为存储
   cmd[4] =  0x6B;                       // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < 5; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1368,17 +1368,17 @@ void Emm_V5_MMCL_Origin_Set_O(uint8_t addr, bool svF)
   * @param    snF   ：多机同步标志，false为不启用，true为启用
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Origin_Trigger_Return(uint8_t addr, uint8_t o_mode, bool snF)
+void drive_emm_MMCL_Origin_Trigger_Return(uint8_t addr, uint8_t o_mode, bool snF)
 {
   uint8_t j = 0, cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x9A;                       // 功能码
   cmd[2] =  o_mode;                     // 回零模式，0为单圈就近回零，1为单圈方向回零，2为多圈无限位碰撞回零，3为多圈有限位开关回零
   cmd[3] =  snF;                        // 多机同步运动标志，false为不启用，true为启用
   cmd[4] =  0x6B;                       // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < 5; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1388,16 +1388,16 @@ void Emm_V5_MMCL_Origin_Trigger_Return(uint8_t addr, uint8_t o_mode, bool snF)
   * @param    addr  ：电机地址
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Origin_Interrupt(uint8_t addr)
+void drive_emm_MMCL_Origin_Interrupt(uint8_t addr)
 {
   uint8_t j = 0, cmd[16] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x9C;                       // 功能码
   cmd[2] =  0x48;                       // 辅助码
   cmd[3] =  0x6B;                       // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < 4; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1416,10 +1416,10 @@ void Emm_V5_MMCL_Origin_Interrupt(uint8_t addr)
   * @param    potF   ：上电自动触发回零，false为不使能，true为使能
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Origin_Modify_Params(uint8_t addr, bool svF, uint8_t o_mode, uint8_t o_dir, uint16_t o_vel, uint32_t o_tm, uint16_t sl_vel, uint16_t sl_ma, uint16_t sl_ms, bool potF)
+void drive_emm_MMCL_Origin_Modify_Params(uint8_t addr, bool svF, uint8_t o_mode, uint8_t o_dir, uint16_t o_vel, uint32_t o_tm, uint16_t sl_vel, uint16_t sl_ma, uint16_t sl_ms, bool potF)
 {
   uint8_t j = 0, cmd[32] = {0};
-  
+
   // 装载命令
   cmd[0] =  addr;                       // 地址
   cmd[1] =  0x4C;                       // 功能码
@@ -1428,20 +1428,20 @@ void Emm_V5_MMCL_Origin_Modify_Params(uint8_t addr, bool svF, uint8_t o_mode, ui
   cmd[4] =  o_mode;                     // 回零模式，0为单圈就近回零，1为单圈方向回零，2为多圈无限位碰撞回零，3为多圈有限位开关回零
   cmd[5] =  o_dir;                      // 回零方向
   cmd[6]  =  (uint8_t)(o_vel >> 8);     // 回零速度(RPM)高8位字节
-  cmd[7]  =  (uint8_t)(o_vel >> 0);     // 回零速度(RPM)低8位字节 
+  cmd[7]  =  (uint8_t)(o_vel >> 0);     // 回零速度(RPM)低8位字节
   cmd[8]  =  (uint8_t)(o_tm >> 24);     // 回零超时时间(bit24 - bit31)
   cmd[9]  =  (uint8_t)(o_tm >> 16);     // 回零超时时间(bit16 - bit23)
   cmd[10] =  (uint8_t)(o_tm >> 8);      // 回零超时时间(bit8  - bit15)
   cmd[11] =  (uint8_t)(o_tm >> 0);      // 回零超时时间(bit0  - bit7 )
   cmd[12] =  (uint8_t)(sl_vel >> 8);    // 无限位碰撞回零检测转速(RPM)高8位字节
-  cmd[13] =  (uint8_t)(sl_vel >> 0);    // 无限位碰撞回零检测转速(RPM)低8位字节 
+  cmd[13] =  (uint8_t)(sl_vel >> 0);    // 无限位碰撞回零检测转速(RPM)低8位字节
   cmd[14] =  (uint8_t)(sl_ma >> 8);     // 无限位碰撞回零检测电流(Ma)高8位字节
-  cmd[15] =  (uint8_t)(sl_ma >> 0);     // 无限位碰撞回零检测电流(Ma)低8位字节 
+  cmd[15] =  (uint8_t)(sl_ma >> 0);     // 无限位碰撞回零检测电流(Ma)低8位字节
   cmd[16] =  (uint8_t)(sl_ms >> 8);     // 无限位碰撞回零检测时间(Ms)高8位字节
   cmd[17] =  (uint8_t)(sl_ms >> 0);     // 无限位碰撞回零检测时间(Ms)低8位字节
   cmd[18] =  potF;                      // 上电自动触发回零，false为不使能，true为使能
   cmd[19] =  0x6B;                      // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < 20; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1459,10 +1459,10 @@ void Emm_V5_MMCL_Origin_Modify_Params(uint8_t addr, bool svF, uint8_t o_mode, ui
 	* @param    time_ms ：定时时间
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Auto_Return_Sys_Params_Timed(uint8_t addr, SysParams_t s, uint16_t time_ms)
+void drive_emm_MMCL_Auto_Return_Sys_Params_Timed(uint8_t addr, SysParams_t s, uint16_t time_ms)
 {
   uint8_t i = 0, j = 0; uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[i] = addr; ++i;                   // 地址
 
@@ -1492,12 +1492,12 @@ void Emm_V5_MMCL_Auto_Return_Sys_Params_Timed(uint8_t addr, SysParams_t s, uint1
 		case S_PIN  : cmd[i] = 0x3D; ++i; break;	// 读取引脚状态（Y42）
     default: break;
   }
-	
+
 	cmd[i] = (uint8_t)(time_ms >> 8);  ++i;	// 定时时间
 	cmd[i] = (uint8_t)(time_ms >> 0);  ++i;
 
   cmd[i] = 0x6B; ++i;                   	// 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < i; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }
@@ -1508,10 +1508,10 @@ void Emm_V5_MMCL_Auto_Return_Sys_Params_Timed(uint8_t addr, SysParams_t s, uint1
   * @param    s     ：系统参数类型
   * @retval   地址 + 功能码 + 命令状态 + 校验字节
   */
-void Emm_V5_MMCL_Read_Sys_Params(uint8_t addr, SysParams_t s)
+void drive_emm_MMCL_Read_Sys_Params(uint8_t addr, SysParams_t s)
 {
   uint8_t i = 0, j = 0; uint8_t cmd[16] = {0};
-  
+
   // 装载命令
   cmd[i] = addr; ++i;                   // 地址
 
@@ -1539,7 +1539,7 @@ void Emm_V5_MMCL_Read_Sys_Params(uint8_t addr, SysParams_t s)
   }
 
   cmd[i] = 0x6B; ++i;                   // 校验字节
-  
+
   // 加载当前命令到多电机命令中
   for(j=0; j < i; j++) { MMCL_cmd[MMCL_count] = cmd[j]; ++MMCL_count; }
 }

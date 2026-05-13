@@ -1,5 +1,5 @@
-#ifndef __BUS_SERVO_H__
-#define __BUS_SERVO_H__
+#ifndef __drive_bus_servo_H__
+#define __drive_bus_servo_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -8,21 +8,21 @@ extern "C" {
 #include "main.h"
 #include <stdint.h>
 
-#define BUS_SERVO_BROADCAST_ID         ((uint8_t)0xFE)
-#define BUS_SERVO_DEFAULT_ACCELERATION ((uint16_t)1500U)
-#define BUS_SERVO_DEFAULT_SPEED        ((uint16_t)2000U)
-#define BUS_SERVO_MIN_ID               ((uint8_t)0x00)
-#define BUS_SERVO_MAX_ID               ((uint8_t)0xFD)
-#define BUS_SERVO_MAX_POSITION         ((int32_t)0x7FFF)
-#define BUS_SERVO_MIN_POSITION         ((int32_t)-0x7FFF)
+#define drive_bus_servo_BROADCAST_ID         ((uint8_t)0xFE)
+#define drive_bus_servo_DEFAULT_ACCELERATION ((uint16_t)1500U)
+#define drive_bus_servo_DEFAULT_SPEED        ((uint16_t)2000U)
+#define drive_bus_servo_MIN_ID               ((uint8_t)0x00)
+#define drive_bus_servo_MAX_ID               ((uint8_t)0xFD)
+#define drive_bus_servo_MAX_POSITION         ((int32_t)0x7FFF)
+#define drive_bus_servo_MIN_POSITION         ((int32_t)-0x7FFF)
 
 typedef enum
 {
-  BUS_SERVO_STATUS_OK = 0,
-  BUS_SERVO_STATUS_INVALID_PARAM,
-  BUS_SERVO_STATUS_NOT_READY,
-  BUS_SERVO_STATUS_TX_ERROR,
-  BUS_SERVO_STATUS_RX_ERROR
+  drive_bus_servo_STATUS_OK = 0,
+  drive_bus_servo_STATUS_INVALID_PARAM,
+  drive_bus_servo_STATUS_NOT_READY,
+  drive_bus_servo_STATUS_TX_ERROR,
+  drive_bus_servo_STATUS_RX_ERROR
 } BusServo_Status_t;
 
 typedef struct
@@ -94,7 +94,7 @@ BusServo_Status_t BusServo_SendCommand(const BusServo_Command_t *command);
   * @brief  按顺序逐条发送一组舵机控制命令。
   * @param  commands: 命令数组指针。
   * @param  count: 命令数量。
-  * @retval 发送过程中最后一次失败状态，全部成功则返回 `BUS_SERVO_STATUS_OK`。
+  * @retval 发送过程中最后一次失败状态，全部成功则返回 `drive_bus_servo_STATUS_OK`。
   */
 BusServo_Status_t BusServo_SendGroup(const BusServo_Command_t *commands, uint8_t count);
 

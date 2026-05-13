@@ -1,13 +1,13 @@
-#include "jetson_debug.h"
-#include "host_protocol.h"
+#include "comm_jetson.h"
+#include "comm_protocol.h"
 #include <stdio.h>
 #include <string.h>
 
-#define JETSON_DEBUG_RX_DMA_BUFFER_SIZE  ((uint16_t)256U)
-#define JETSON_DEBUG_PRINT_BUFFER_SIZE   ((uint16_t)256U)
+#define comm_jetson_RX_DMA_BUFFER_SIZE  ((uint16_t)256U)
+#define comm_jetson_PRINT_BUFFER_SIZE   ((uint16_t)256U)
 
-static UART_HandleTypeDef *g_jetson_debug_uart = NULL;
-static uint8_t g_jetson_rx_dma_buffer[JETSON_DEBUG_RX_DMA_BUFFER_SIZE] = {0};
+static UART_HandleTypeDef *g_comm_jetson_uart = NULL;
+static uint8_t g_jetson_rx_dma_buffer[comm_jetson_RX_DMA_BUFFER_SIZE] = {0};
 static uint16_t g_jetson_rx_last_pos = 0U;
 
 static volatile uint16_t g_jetson_print_length = 0U;
@@ -15,33 +15,33 @@ static volatile uint8_t g_jetson_print_ready = 0U;
 static volatile uint8_t g_jetson_error_ready = 0U;
 static volatile uint32_t g_jetson_overflow_count = 0U;
 static volatile uint32_t g_jetson_uart_error_code = 0U;
-static uint8_t g_jetson_print_buffer[JETSON_DEBUG_PRINT_BUFFER_SIZE] = {0};
+static uint8_t g_jetson_print_buffer[comm_jetson_PRINT_BUFFER_SIZE] = {0};
 
-static JetsonDebug_Status_t g_jetson_last_status = JETSON_DEBUG_STATUS_NOT_READY;
+static JetsonDebug_Status_t g_jetson_last_status = comm_jetson_STATUS_NOT_READY;
 
 static JetsonDebug_Status_t JetsonDebug_StartReceive(void)
 {
-  if (g_jetson_debug_uart == NULL)
+  if (g_comm_jetson_uart == NULL)
   {
-    g_jetson_last_status = JETSON_DEBUG_STATUS_NOT_READY;
+    g_jetson_last_status = comm_jetson_STATUS_NOT_READY;
     return g_jetson_last_status;
   }
 
-  if (HAL_UARTEx_ReceiveToIdle_DMA(g_jetson_debug_uart,
+  if (HAL_UARTEx_ReceiveToIdle_DMA(g_comm_jetson_uart,
                                    g_jetson_rx_dma_buffer,
-                                   JETSON_DEBUG_RX_DMA_BUFFER_SIZE) != HAL_OK)
+                                   comm_jetson_RX_DMA_BUFFER_SIZE) != HAL_OK)
   {
-    g_jetson_last_status = JETSON_DEBUG_STATUS_RX_ERROR;
+    g_jetson_last_status = comm_jetson_STATUS_RX_ERROR;
     return g_jetson_last_status;
   }
 
-  if (g_jetson_debug_uart->hdmarx != NULL)
+  if (g_comm_jetson_uart->hdmarx != NULL)
   {
-    __HAL_DMA_DISABLE_IT(g_jetson_debug_uart->hdmarx, DMA_IT_HT);
+    __HAL_DMA_DISABLE_IT(g_comm_jetson_uart->hdmarx, DMA_IT_HT);
   }
 
   g_jetson_rx_last_pos = 0U;
-  g_jetson_last_status = JETSON_DEBUG_STATUS_OK;
+  g_jetson_last_status = comm_jetson_STATUS_OK;
   return g_jetson_last_status;
 }
 
@@ -60,16 +60,16 @@ static void JetsonDebug_AppendReceivedData(const uint8_t *data, uint16_t length)
   }
 
   /* 兼容旧 Jetson 调试入口，将收到的字节交给统一协议解析层。 */
-  HostProtocol_OnBytes(HOST_PROTOCOL_SOURCE_JETSON, data, length);
+  HostProtocol_OnBytes(comm_protocol_SOURCE_JETSON, data, length);
 
-  if (g_jetson_print_length >= JETSON_DEBUG_PRINT_BUFFER_SIZE)
+  if (g_jetson_print_length >= comm_jetson_PRINT_BUFFER_SIZE)
   {
     ++g_jetson_overflow_count;
-    g_jetson_last_status = JETSON_DEBUG_STATUS_OVERFLOW;
+    g_jetson_last_status = comm_jetson_STATUS_OVERFLOW;
     return;
   }
 
-  copy_length = (uint16_t)(JETSON_DEBUG_PRINT_BUFFER_SIZE - g_jetson_print_length);
+  copy_length = (uint16_t)(comm_jetson_PRINT_BUFFER_SIZE - g_jetson_print_length);
   if (copy_length > length)
   {
     copy_length = length;
@@ -82,7 +82,7 @@ static void JetsonDebug_AppendReceivedData(const uint8_t *data, uint16_t length)
   if (copy_length < length)
   {
     ++g_jetson_overflow_count;
-    g_jetson_last_status = JETSON_DEBUG_STATUS_OVERFLOW;
+    g_jetson_last_status = comm_jetson_STATUS_OVERFLOW;
   }
 }
 
@@ -90,9 +90,9 @@ static void JetsonDebug_HandleRxEvent(uint16_t size)
 {
   uint16_t current_pos = size;
 
-  if (current_pos > JETSON_DEBUG_RX_DMA_BUFFER_SIZE)
+  if (current_pos > comm_jetson_RX_DMA_BUFFER_SIZE)
   {
-    current_pos = JETSON_DEBUG_RX_DMA_BUFFER_SIZE;
+    current_pos = comm_jetson_RX_DMA_BUFFER_SIZE;
   }
 
   if (current_pos == g_jetson_rx_last_pos)
@@ -108,25 +108,25 @@ static void JetsonDebug_HandleRxEvent(uint16_t size)
   else
   {
     JetsonDebug_AppendReceivedData(&g_jetson_rx_dma_buffer[g_jetson_rx_last_pos],
-                                   (uint16_t)(JETSON_DEBUG_RX_DMA_BUFFER_SIZE - g_jetson_rx_last_pos));
+                                   (uint16_t)(comm_jetson_RX_DMA_BUFFER_SIZE - g_jetson_rx_last_pos));
     if (current_pos > 0U)
     {
       JetsonDebug_AppendReceivedData(&g_jetson_rx_dma_buffer[0], current_pos);
     }
   }
 
-  g_jetson_rx_last_pos = (current_pos == JETSON_DEBUG_RX_DMA_BUFFER_SIZE) ? 0U : current_pos;
+  g_jetson_rx_last_pos = (current_pos == comm_jetson_RX_DMA_BUFFER_SIZE) ? 0U : current_pos;
 }
 
 JetsonDebug_Status_t JetsonDebug_Init(UART_HandleTypeDef *huart)
 {
   if (huart == NULL)
   {
-    g_jetson_last_status = JETSON_DEBUG_STATUS_INVALID_PARAM;
+    g_jetson_last_status = comm_jetson_STATUS_INVALID_PARAM;
     return g_jetson_last_status;
   }
 
-  g_jetson_debug_uart = huart;
+  g_comm_jetson_uart = huart;
   g_jetson_rx_last_pos = 0U;
   g_jetson_print_length = 0U;
   g_jetson_print_ready = 0U;
@@ -135,14 +135,14 @@ JetsonDebug_Status_t JetsonDebug_Init(UART_HandleTypeDef *huart)
   g_jetson_uart_error_code = 0U;
   memset(g_jetson_rx_dma_buffer, 0, sizeof(g_jetson_rx_dma_buffer));
   memset(g_jetson_print_buffer, 0, sizeof(g_jetson_print_buffer));
-  HostProtocol_RegisterSource(HOST_PROTOCOL_SOURCE_JETSON, huart);
+  HostProtocol_RegisterSource(comm_protocol_SOURCE_JETSON, huart);
 
   return JetsonDebug_StartReceive();
 }
 
 void JetsonDebug_Poll(void)
 {
-  uint8_t local_buffer[JETSON_DEBUG_PRINT_BUFFER_SIZE];
+  uint8_t local_buffer[comm_jetson_PRINT_BUFFER_SIZE];
   uint16_t local_length;
   uint32_t overflow_count;
   uint32_t error_code;
@@ -159,9 +159,9 @@ void JetsonDebug_Poll(void)
   __disable_irq();
   error_code = g_jetson_uart_error_code;
   local_length = g_jetson_print_length;
-  if (local_length > JETSON_DEBUG_PRINT_BUFFER_SIZE)
+  if (local_length > comm_jetson_PRINT_BUFFER_SIZE)
   {
-    local_length = JETSON_DEBUG_PRINT_BUFFER_SIZE;
+    local_length = comm_jetson_PRINT_BUFFER_SIZE;
   }
   memcpy(local_buffer, g_jetson_print_buffer, local_length);
   overflow_count = g_jetson_overflow_count;
@@ -223,7 +223,7 @@ void JetsonDebug_Poll(void)
 
 void JetsonDebug_OnUartRxEvent(UART_HandleTypeDef *huart, uint16_t size)
 {
-  if ((g_jetson_debug_uart != NULL) && (huart == g_jetson_debug_uart))
+  if ((g_comm_jetson_uart != NULL) && (huart == g_comm_jetson_uart))
   {
     JetsonDebug_HandleRxEvent(size);
   }
@@ -231,11 +231,11 @@ void JetsonDebug_OnUartRxEvent(UART_HandleTypeDef *huart, uint16_t size)
 
 void JetsonDebug_OnUartError(UART_HandleTypeDef *huart)
 {
-  if ((g_jetson_debug_uart != NULL) && (huart == g_jetson_debug_uart))
+  if ((g_comm_jetson_uart != NULL) && (huart == g_comm_jetson_uart))
   {
     g_jetson_uart_error_code = huart->ErrorCode;
     g_jetson_error_ready = 1U;
-    g_jetson_last_status = JETSON_DEBUG_STATUS_RX_ERROR;
+    g_jetson_last_status = comm_jetson_STATUS_RX_ERROR;
     (void)JetsonDebug_StartReceive();
   }
 }

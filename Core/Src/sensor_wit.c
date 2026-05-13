@@ -1,4 +1,4 @@
-#include "wit_imu.h"
+#include "sensor_wit.h"
 #include <string.h>
 
 extern UART_HandleTypeDef huart2;

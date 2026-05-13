@@ -1,15 +1,16 @@
-# Inc 目录说明
+﻿# Inc 目录说明
 
 本目录存放 `Core` 层头文件。
 
-- `main.h`：主程序公共声明
-- `stm32f4xx_hal_conf.h`：HAL 组件配置
-- `stm32f4xx_it.h`：中断入口声明
-- `zdt_stepper.h`：张大头步进电机协议接口
-- `bus_servo.h`：总线舵机设备层接口
-- `wit_imu.h`：WIT 陀螺仪协议层接口
-- `host_rx.h`：PC 与 Jetson 原始接收统一封装接口，仅用于链路调试打印
-- `jetson_debug.h`：Jetson USART6 原始接收调试接口，仅用于通信联调打印
-- `host_protocol.h`：上下位机协议解析接口，用于接收字节流、执行协议命令并返回 ACK
-- `ops_sensor.h`：OPS 定位系统协议层接口
-- `chassis_motion.h`：基于 Emm_V5 的麦克纳姆轮底盘高层运动接口，包含电机 ID、方向修正和各动作平滑预设参数
+- `main.h`：主程序公共声明。
+- `stm32f4xx_hal_conf.h`：HAL 组件配置。
+- `stm32f4xx_it.h`：中断入口声明。
+- `drive_emm.h`：张大头 Emm_V5 步进闭环驱动接口。
+- `drive_bus_servo.h`：总线舵机控制接口。
+- `sensor_wit.h`：WIT / HWT905 IMU 数据接口。
+- `sensor_ops.h`：OPS 定位系统数据接口。
+- `comm_pc.h`：PC / Jetson 原始接收桥接接口。
+- `comm_jetson.h`：Jetson 原始接收调试兼容接口。
+- `comm_protocol.h`：上位机二进制协议解析接口。
+- `advance_chassis.h`：麦克纳姆底盘高级运动接口。
+- `advance_world.h`：全局坐标系、world 位姿和坐标变换接口。

@@ -1,6 +1,6 @@
-#include "chassis_motion.h"
+#include "advance_chassis.h"
 
-#include "Emm_V5.h"
+#include "drive_emm.h"
 
 typedef struct
 {
@@ -51,7 +51,7 @@ static void Chassis_WaitEmmUartReady(void)
 {
   uint32_t start_tick = HAL_GetTick();
 
-  while (HAL_UART_GetState(EMM_V5_UART) != HAL_UART_STATE_READY)
+  while (HAL_UART_GetState(drive_emm_UART) != HAL_UART_STATE_READY)
   {
     if ((HAL_GetTick() - start_tick) >= CHASSIS_UART_WAIT_TIMEOUT_MS)
     {
@@ -63,9 +63,9 @@ static void Chassis_WaitEmmUartReady(void)
 static void Chassis_SendLoadedCommand(void)
 {
   Chassis_WaitEmmUartReady();
-  Emm_V5_Multi_Motor_Cmd(CHASSIS_SYNC_ADDR);
+  drive_emm_Multi_Motor_Cmd(CHASSIS_SYNC_ADDR);
   Chassis_WaitEmmUartReady();
-  Emm_V5_Synchronous_motion(CHASSIS_SYNC_ADDR);
+  drive_emm_Synchronous_motion(CHASSIS_SYNC_ADDR);
 }
 
 static void Chassis_LoadMotorSpeed(const ChassisMotorConfig *motor, int16_t rpm, uint8_t acc)
@@ -75,7 +75,7 @@ static void Chassis_LoadMotorSpeed(const ChassisMotorConfig *motor, int16_t rpm,
   uint8_t dir = (actual_rpm >= 0) ? 0U : 1U;
 
   /* snF=true 表示把命令装入 Emm 多电机同步命令缓存。 */
-  Emm_V5_MMCL_Vel_Control(motor->id, dir, abs_rpm, acc, true);
+  drive_emm_MMCL_Vel_Control(motor->id, dir, abs_rpm, acc, true);
 }
 
 void Chassis_Enable(bool enable)
@@ -84,7 +84,7 @@ void Chassis_Enable(bool enable)
 
   for (i = 0U; i < 4U; ++i)
   {
-    Emm_V5_MMCL_En_Control(g_chassis_motors[i].id, enable, true);
+    drive_emm_MMCL_En_Control(g_chassis_motors[i].id, enable, true);
   }
 
   Chassis_SendLoadedCommand();
@@ -96,7 +96,7 @@ void Chassis_Stop(void)
 
   for (i = 0U; i < 4U; ++i)
   {
-    Emm_V5_MMCL_Stop_Now(g_chassis_motors[i].id, true);
+    drive_emm_MMCL_Stop_Now(g_chassis_motors[i].id, true);
   }
 
   Chassis_SendLoadedCommand();

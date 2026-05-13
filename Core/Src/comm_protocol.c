@@ -1,5 +1,5 @@
-#include "host_protocol.h"
-#include "chassis_motion.h"
+#include "comm_protocol.h"
+#include "advance_chassis.h"
 #include <stdbool.h>
 #include <string.h>
 
@@ -19,16 +19,16 @@
  * - CRC 使用 CRC16-Modbus，从 Version 字节开始计算，到 Payload 最后一个字节结束。
  * - 中断 / DMA 回调只负责喂入字节流，命令执行统一放在 HostProtocol_Poll()。
  */
-#define HOST_PROTOCOL_HEADER1          ((uint8_t)0x5AU)
-#define HOST_PROTOCOL_HEADER2          ((uint8_t)0xA5U)
-#define HOST_PROTOCOL_VERSION          ((uint8_t)0x01U)
-#define HOST_PROTOCOL_HEADER_LEN       ((uint16_t)9U)
-#define HOST_PROTOCOL_CRC_LEN          ((uint16_t)2U)
-#define HOST_PROTOCOL_MAX_PAYLOAD      ((uint16_t)255U)
-#define HOST_PROTOCOL_MAX_FRAME_LEN    (HOST_PROTOCOL_HEADER_LEN + HOST_PROTOCOL_MAX_PAYLOAD + HOST_PROTOCOL_CRC_LEN)
-#define HOST_PROTOCOL_QUEUE_SIZE       ((uint8_t)4U)
-#define HOST_PROTOCOL_TX_TIMEOUT_MS    ((uint32_t)20U)
-#define HOST_PROTOCOL_HEARTBEAT_MS     ((uint32_t)300U)
+#define comm_protocol_HEADER1          ((uint8_t)0x5AU)
+#define comm_protocol_HEADER2          ((uint8_t)0xA5U)
+#define comm_protocol_VERSION          ((uint8_t)0x01U)
+#define comm_protocol_HEADER_LEN       ((uint16_t)9U)
+#define comm_protocol_CRC_LEN          ((uint16_t)2U)
+#define comm_protocol_MAX_PAYLOAD      ((uint16_t)255U)
+#define comm_protocol_MAX_FRAME_LEN    (comm_protocol_HEADER_LEN + comm_protocol_MAX_PAYLOAD + comm_protocol_CRC_LEN)
+#define comm_protocol_QUEUE_SIZE       ((uint8_t)4U)
+#define comm_protocol_TX_TIMEOUT_MS    ((uint32_t)20U)
+#define comm_protocol_HEARTBEAT_MS     ((uint32_t)300U)
 
 typedef enum
 {
@@ -64,7 +64,7 @@ typedef enum
 typedef struct
 {
   /* 正在收集的一帧原始数据，包含帧头和 CRC。 */
-  uint8_t frame[HOST_PROTOCOL_MAX_FRAME_LEN];
+  uint8_t frame[comm_protocol_MAX_FRAME_LEN];
   /* 当前已经收到的字节数。 */
   uint16_t pos;
   /* 收到 Length 字段后才能确定完整帧总长。 */
@@ -79,16 +79,16 @@ typedef struct
   uint8_t cmd_id;
   uint16_t seq;
   uint8_t payload_len;
-  uint8_t payload[HOST_PROTOCOL_MAX_PAYLOAD];
+  uint8_t payload[comm_protocol_MAX_PAYLOAD];
 } HostProtocol_Frame_t;
 
-static UART_HandleTypeDef *g_host_protocol_uart[HOST_PROTOCOL_SOURCE_COUNT] = {0};
-static HostProtocol_Parser_t g_host_protocol_parser[HOST_PROTOCOL_SOURCE_COUNT] = {0};
+static UART_HandleTypeDef *g_comm_protocol_uart[comm_protocol_SOURCE_COUNT] = {0};
+static HostProtocol_Parser_t g_comm_protocol_parser[comm_protocol_SOURCE_COUNT] = {0};
 static volatile uint8_t g_queue_head = 0U;
 static volatile uint8_t g_queue_tail = 0U;
 static volatile uint8_t g_queue_count = 0U;
-static HostProtocol_Frame_t g_queue[HOST_PROTOCOL_QUEUE_SIZE] = {0};
-static HostProtocol_Status_t g_last_status = HOST_PROTOCOL_STATUS_OK;
+static HostProtocol_Frame_t g_queue[comm_protocol_QUEUE_SIZE] = {0};
+static HostProtocol_Status_t g_last_status = comm_protocol_STATUS_OK;
 static uint32_t g_last_heartbeat_tick = 0U;
 static uint8_t g_heartbeat_seen = 0U;
 static uint8_t g_heartbeat_online = 0U;
@@ -198,7 +198,7 @@ static void HostProtocol_CheckHeartbeatTimeout(void)
 {
   if ((g_heartbeat_seen != 0U) &&
       (g_heartbeat_online != 0U) &&
-      ((HAL_GetTick() - g_last_heartbeat_tick) > HOST_PROTOCOL_HEARTBEAT_MS))
+      ((HAL_GetTick() - g_last_heartbeat_tick) > comm_protocol_HEARTBEAT_MS))
   {
     g_heartbeat_online = 0U;
     Chassis_Stop();
@@ -216,15 +216,15 @@ static uint8_t HostProtocol_EnqueueFrame(HostProtocol_Source_t source, const uin
   HostProtocol_Frame_t *item;
   uint8_t payload_len;
 
-  if ((source >= HOST_PROTOCOL_SOURCE_COUNT) || (frame_len < (HOST_PROTOCOL_HEADER_LEN + HOST_PROTOCOL_CRC_LEN)))
+  if ((source >= comm_protocol_SOURCE_COUNT) || (frame_len < (comm_protocol_HEADER_LEN + comm_protocol_CRC_LEN)))
   {
-    g_last_status = HOST_PROTOCOL_STATUS_INVALID_PARAM;
+    g_last_status = comm_protocol_STATUS_INVALID_PARAM;
     return 0U;
   }
 
-  if (g_queue_count >= HOST_PROTOCOL_QUEUE_SIZE)
+  if (g_queue_count >= comm_protocol_QUEUE_SIZE)
   {
-    g_last_status = HOST_PROTOCOL_STATUS_OVERFLOW;
+    g_last_status = comm_protocol_STATUS_OVERFLOW;
     return 0U;
   }
 
@@ -241,9 +241,9 @@ static uint8_t HostProtocol_EnqueueFrame(HostProtocol_Source_t source, const uin
     memcpy(item->payload, &frame[9], payload_len);
   }
 
-  g_queue_head = (uint8_t)((g_queue_head + 1U) % HOST_PROTOCOL_QUEUE_SIZE);
+  g_queue_head = (uint8_t)((g_queue_head + 1U) % comm_protocol_QUEUE_SIZE);
   ++g_queue_count;
-  g_last_status = HOST_PROTOCOL_STATUS_OK;
+  g_last_status = comm_protocol_STATUS_OK;
   return 1U;
 }
 
@@ -263,7 +263,7 @@ static uint8_t HostProtocol_DequeueFrame(HostProtocol_Frame_t *frame)
   }
 
   memcpy(frame, &g_queue[g_queue_tail], sizeof(HostProtocol_Frame_t));
-  g_queue_tail = (uint8_t)((g_queue_tail + 1U) % HOST_PROTOCOL_QUEUE_SIZE);
+  g_queue_tail = (uint8_t)((g_queue_tail + 1U) % comm_protocol_QUEUE_SIZE);
   --g_queue_count;
   __enable_irq();
   return 1U;
@@ -280,23 +280,23 @@ static uint8_t HostProtocol_DequeueFrame(HostProtocol_Frame_t *frame)
 static void HostProtocol_SendAck(const HostProtocol_Frame_t *frame, HostProtocol_AckResult_t result, uint8_t detail)
 {
   UART_HandleTypeDef *huart;
-  uint8_t tx[HOST_PROTOCOL_HEADER_LEN + 4U + HOST_PROTOCOL_CRC_LEN];
+  uint8_t tx[comm_protocol_HEADER_LEN + 4U + comm_protocol_CRC_LEN];
   uint16_t crc;
 
-  if ((frame == NULL) || (frame->source >= HOST_PROTOCOL_SOURCE_COUNT))
+  if ((frame == NULL) || (frame->source >= comm_protocol_SOURCE_COUNT))
   {
     return;
   }
 
-  huart = g_host_protocol_uart[frame->source];
+  huart = g_comm_protocol_uart[frame->source];
   if (huart == NULL)
   {
     return;
   }
 
-  tx[0] = HOST_PROTOCOL_HEADER1;
-  tx[1] = HOST_PROTOCOL_HEADER2;
-  tx[2] = HOST_PROTOCOL_VERSION;
+  tx[0] = comm_protocol_HEADER1;
+  tx[1] = comm_protocol_HEADER2;
+  tx[2] = comm_protocol_VERSION;
   tx[3] = MSG_ACK;
   tx[4] = frame->cmd_set;
   tx[5] = frame->cmd_id;
@@ -308,7 +308,7 @@ static void HostProtocol_SendAck(const HostProtocol_Frame_t *frame, HostProtocol
   crc = HostProtocol_Crc16Modbus(&tx[2], 7U + tx[8]);
   HostProtocol_WriteU16(&tx[13], crc);
 
-  (void)HAL_UART_Transmit(huart, tx, (uint16_t)sizeof(tx), HOST_PROTOCOL_TX_TIMEOUT_MS);
+  (void)HAL_UART_Transmit(huart, tx, (uint16_t)sizeof(tx), comm_protocol_TX_TIMEOUT_MS);
 }
 
 /* SYSTEM 命令只维护通信状态，不直接控制外设。 */
@@ -397,9 +397,9 @@ static HostProtocol_AckResult_t HostProtocol_HandleSafety(const HostProtocol_Fra
 }
 
 /*
- * CHASSIS 命令只调用 chassis_motion 高层接口。
+ * CHASSIS 命令只调用 advance_chassis 高层接口。
  *
- * 上位机不直接暴露 Emm_V5 / ZDT 原始帧，避免上位机绑定具体电机协议。
+ * 上位机不直接暴露 drive_emm / ZDT 原始帧，避免上位机绑定具体电机协议。
  */
 static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Frame_t *frame)
 {
@@ -538,13 +538,13 @@ static HostProtocol_AckResult_t HostProtocol_HandleCommand(const HostProtocol_Fr
  */
 static void HostProtocol_FeedByte(HostProtocol_Source_t source, uint8_t byte)
 {
-  HostProtocol_Parser_t *parser = &g_host_protocol_parser[source];
+  HostProtocol_Parser_t *parser = &g_comm_protocol_parser[source];
   uint16_t crc_calc;
   uint16_t crc_recv;
 
   if (parser->pos == 0U)
   {
-    if (byte == HOST_PROTOCOL_HEADER1)
+    if (byte == comm_protocol_HEADER1)
     {
       parser->frame[0] = byte;
       parser->pos = 1U;
@@ -554,7 +554,7 @@ static void HostProtocol_FeedByte(HostProtocol_Source_t source, uint8_t byte)
 
   if (parser->pos == 1U)
   {
-    if (byte == HOST_PROTOCOL_HEADER2)
+    if (byte == comm_protocol_HEADER2)
     {
       parser->frame[1] = byte;
       parser->pos = 2U;
@@ -562,7 +562,7 @@ static void HostProtocol_FeedByte(HostProtocol_Source_t source, uint8_t byte)
     else
     {
       HostProtocol_ResetParser(parser);
-      if (byte == HOST_PROTOCOL_HEADER1)
+      if (byte == comm_protocol_HEADER1)
       {
         parser->frame[0] = byte;
         parser->pos = 1U;
@@ -571,7 +571,7 @@ static void HostProtocol_FeedByte(HostProtocol_Source_t source, uint8_t byte)
     return;
   }
 
-  if (parser->pos >= HOST_PROTOCOL_MAX_FRAME_LEN)
+  if (parser->pos >= comm_protocol_MAX_FRAME_LEN)
   {
     HostProtocol_ResetParser(parser);
     return;
@@ -579,20 +579,20 @@ static void HostProtocol_FeedByte(HostProtocol_Source_t source, uint8_t byte)
 
   parser->frame[parser->pos++] = byte;
 
-  if (parser->pos == HOST_PROTOCOL_HEADER_LEN)
+  if (parser->pos == comm_protocol_HEADER_LEN)
   {
-    if (parser->frame[2] != HOST_PROTOCOL_VERSION)
+    if (parser->frame[2] != comm_protocol_VERSION)
     {
       HostProtocol_ResetParser(parser);
       return;
     }
-    parser->expected_len = (uint16_t)(HOST_PROTOCOL_HEADER_LEN + parser->frame[8] + HOST_PROTOCOL_CRC_LEN);
+    parser->expected_len = (uint16_t)(comm_protocol_HEADER_LEN + parser->frame[8] + comm_protocol_CRC_LEN);
   }
 
   if ((parser->expected_len > 0U) && (parser->pos >= parser->expected_len))
   {
     /* CRC 字段本身不参与计算；计算范围从 Version 到 Payload 结束。 */
-    crc_recv = HostProtocol_ReadU16(&parser->frame[parser->expected_len - HOST_PROTOCOL_CRC_LEN]);
+    crc_recv = HostProtocol_ReadU16(&parser->frame[parser->expected_len - comm_protocol_CRC_LEN]);
     crc_calc = HostProtocol_Crc16Modbus(&parser->frame[2], (uint16_t)(7U + parser->frame[8]));
     if (crc_recv == crc_calc)
     {
@@ -605,15 +605,15 @@ static void HostProtocol_FeedByte(HostProtocol_Source_t source, uint8_t byte)
 /* 注册接收源对应 UART，主要用于 ACK 回发。 */
 void HostProtocol_RegisterSource(HostProtocol_Source_t source, UART_HandleTypeDef *huart)
 {
-  if (source >= HOST_PROTOCOL_SOURCE_COUNT)
+  if (source >= comm_protocol_SOURCE_COUNT)
   {
-    g_last_status = HOST_PROTOCOL_STATUS_INVALID_PARAM;
+    g_last_status = comm_protocol_STATUS_INVALID_PARAM;
     return;
   }
 
-  g_host_protocol_uart[source] = huart;
-  HostProtocol_ResetParser(&g_host_protocol_parser[source]);
-  g_last_status = HOST_PROTOCOL_STATUS_OK;
+  g_comm_protocol_uart[source] = huart;
+  HostProtocol_ResetParser(&g_comm_protocol_parser[source]);
+  g_last_status = comm_protocol_STATUS_OK;
 }
 
 /* 从 DMA/IDLE 接收层输入原始字节，可一次输入半帧、多帧或粘包数据。 */
@@ -621,9 +621,9 @@ void HostProtocol_OnBytes(HostProtocol_Source_t source, const uint8_t *data, uin
 {
   uint16_t index;
 
-  if ((source >= HOST_PROTOCOL_SOURCE_COUNT) || (data == NULL))
+  if ((source >= comm_protocol_SOURCE_COUNT) || (data == NULL))
   {
-    g_last_status = HOST_PROTOCOL_STATUS_INVALID_PARAM;
+    g_last_status = comm_protocol_STATUS_INVALID_PARAM;
     return;
   }
 

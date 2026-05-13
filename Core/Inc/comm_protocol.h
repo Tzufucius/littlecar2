@@ -1,5 +1,5 @@
-#ifndef __HOST_PROTOCOL_H__
-#define __HOST_PROTOCOL_H__
+#ifndef __comm_protocol_H__
+#define __comm_protocol_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,16 +10,16 @@ extern "C" {
 
 typedef enum
 {
-  HOST_PROTOCOL_SOURCE_PC = 0,
-  HOST_PROTOCOL_SOURCE_JETSON,
-  HOST_PROTOCOL_SOURCE_COUNT
+  comm_protocol_SOURCE_PC = 0,
+  comm_protocol_SOURCE_JETSON,
+  comm_protocol_SOURCE_COUNT
 } HostProtocol_Source_t;
 
 typedef enum
 {
-  HOST_PROTOCOL_STATUS_OK = 0,
-  HOST_PROTOCOL_STATUS_INVALID_PARAM,
-  HOST_PROTOCOL_STATUS_OVERFLOW
+  comm_protocol_STATUS_OK = 0,
+  comm_protocol_STATUS_INVALID_PARAM,
+  comm_protocol_STATUS_OVERFLOW
 } HostProtocol_Status_t;
 
 /*
