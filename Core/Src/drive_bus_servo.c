@@ -1,6 +1,7 @@
 #include "drive_bus_servo.h"
 
 #include <string.h>
+#include <main.h>
 
 #define drive_bus_servo_FRAME_HEADER             ((uint8_t)0xFF)
 #define drive_bus_servo_FRAME_WRITE_INSTRUCTION  ((uint8_t)0x03)
@@ -107,6 +108,13 @@ static BusServo_Status_t BusServo_BuildPositionFrame(const BusServo_Command_t *c
   frame[11] = (uint8_t)(command->speed & 0x00FFU);
   frame[12] = (uint8_t)((command->speed >> 8) & 0x00FFU);
   frame[13] = BusServo_CalcChecksum(frame);
+
+  // 调试
+  // int i = 0;
+  // for (i = 0; i<14; i++){
+  //   printf("%02x ", frame[i]);
+  // }
+  // printf("\n");
 
   return drive_bus_servo_STATUS_OK;
 }

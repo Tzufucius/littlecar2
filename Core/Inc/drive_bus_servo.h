@@ -8,6 +8,13 @@ extern "C" {
 #include "main.h"
 #include <stdint.h>
 
+/**
+ * 说明取值范围：
+ * 加速度 0-255
+ * 位置：0-4095
+ * 速度：0-3400
+ *  */ 
+
 #define drive_bus_servo_BROADCAST_ID         ((uint8_t)0xFE)
 #define drive_bus_servo_DEFAULT_ACCELERATION ((uint16_t)1500U)
 #define drive_bus_servo_DEFAULT_SPEED        ((uint16_t)2000U)
