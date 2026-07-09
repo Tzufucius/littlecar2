@@ -171,3 +171,26 @@
 - 本工程通常不在 Codex 环境内编译，下位机运行由用户手动上板测试。
 - 代码编写保持简洁，优先实现用户指定的最小例程，不额外加入复杂验证链路。
 - Git 仓库根目录位于 `F:\Project\littleCar2\zhengdian\4-29\.git`。
+
+## 8. 世界速度与方向配置
+
+底盘现在保留原有 RPM 调试接口，并新增物理速度接口：
+
+- `Chassis_SetBodyVelocityEx(vx_right_mm_s, vy_forward_mm_s, wz_ccw_deg_s, acc)`
+- `AdvanceMotion_SetWorldVelocityEx(vx_world_mm_s, vy_world_mm_s, wz_ccw_deg_s, acc)`
+
+方向约定：
+
+- `vx_right_mm_s > 0`：车体向右。
+- `vy_forward_mm_s > 0`：车体向前。
+- `wz_ccw_deg_s > 0`：俯视逆时针旋转。
+
+若实车方向与约定相反，优先调整 `Core/Inc/advance_chassis.h` 中的编译期宏：
+
+- `CHASSIS_MOTOR_*_SIGN`：单个电机正反方向。
+- `CHASSIS_BODY_X_SIGN`：整体右移方向。
+- `CHASSIS_BODY_Y_SIGN`：整体前进方向。
+- `CHASSIS_BODY_WZ_SIGN`：整体逆时针旋转方向。
+- `ADVANCE_WORLD_OPS_YAW_REVERSED` / `ADVANCE_WORLD_WIT_YAW_REVERSED`：OPS / WIT yaw 读数方向。
+
+实车调试建议先低速确认：单轮 ID、前进、右移、逆时针旋转，再验证 world `+Y` 在不同 yaw 下方向保持一致。
