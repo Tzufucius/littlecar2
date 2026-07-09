@@ -40,7 +40,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define ENABLE_DATOU_POWERON_TEST 0
 #define WORLD_ORIGIN_STATIC_WAIT_MS ((uint32_t)15000U)
 
 /* USER CODE END PD */
@@ -135,6 +134,15 @@ void situation_led()
   }
 }
 
+void test()
+{
+  // 测试 EMM V5 大头电机
+  testEmmV5Datou(CHASSIS_MOTOR_LF_ID);
+  testEmmV5Datou(CHASSIS_MOTOR_RF_ID);
+  testEmmV5Datou(CHASSIS_MOTOR_LR_ID);
+  testEmmV5Datou(CHASSIS_MOTOR_RR_ID);
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -193,13 +201,6 @@ int main(void)
   printf("USART1 printf ready\r\n");
   HAL_Delay(100);
 
-  testEmmV5Datou(6);
-
-#if ENABLE_DATOU_POWERON_TEST
-  testEmmV5Datou(1);
-  HAL_Delay(500);
-#endif
-
   printf("OPS static init wait %lu ms\r\n", (unsigned long)WORLD_ORIGIN_STATIC_WAIT_MS);
   HAL_Delay(WORLD_ORIGIN_STATIC_WAIT_MS);
   if (AdvanceWorld_ResetOrigin() == ADVANCE_WORLD_STATUS_OK)
@@ -210,6 +211,9 @@ int main(void)
   {
     printf("AdvanceWorld origin failed, keep polling OPS\r\n");
   }
+
+  test();
+
 
   /* USER CODE END 2 */
 

@@ -14,8 +14,8 @@ extern "C"
  * LF: 左前轮，RF: 右前轮，LR: 左后轮，RR: 右后轮。
  */
 #define CHASSIS_MOTOR_LF_ID ((uint8_t)1U)
-#define CHASSIS_MOTOR_RF_ID ((uint8_t)2U)
-#define CHASSIS_MOTOR_LR_ID ((uint8_t)3U)
+#define CHASSIS_MOTOR_RF_ID ((uint8_t)3U)
+#define CHASSIS_MOTOR_LR_ID ((uint8_t)2U)
 #define CHASSIS_MOTOR_RR_ID ((uint8_t)4U)
 
 /*
