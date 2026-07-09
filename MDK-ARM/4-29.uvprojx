@@ -407,6 +407,11 @@
               <FilePath>../Core/Src/advance_world.c</FilePath>
             </File>
             <File>
+              <FileName>advance_motion.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/advance_motion.c</FilePath>
+            </File>
+            <File>
               <FileName>car_pose.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/car_pose.c</FilePath>
