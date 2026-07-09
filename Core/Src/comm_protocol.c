@@ -1,5 +1,7 @@
 #include "comm_protocol.h"
 #include "advance_chassis.h"
+#include "advance_motion.h"
+#include "advance_world.h"
 #include <stdbool.h>
 #include <string.h>
 
@@ -410,6 +412,10 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
   int16_t forward_rpm;
   int16_t strafe_rpm;
   int16_t rotate_rpm;
+  int16_t vx_mm_s;
+  int16_t vy_mm_s;
+  int16_t wz_cdeg_s;
+  AdvanceMotion_Status_t motion_status;
 
   if (HostProtocol_IsControlAllowed() == 0U)
   {
@@ -497,6 +503,48 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     }
     Chassis_MoveMecanumEx(forward_rpm, strafe_rpm, rotate_rpm, frame->payload[6]);
     return ACK_OK;
+
+  case 0x05U:
+    /*
+     * CHASSIS_SET_BODY_VELOCITY:
+     *   vx_mm_s > 0 right, vy_mm_s > 0 forward, wz_cdeg_s > 0 counter-clockwise.
+     */
+    if (frame->payload_len != 7U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    vx_mm_s = HostProtocol_ReadI16(&frame->payload[0]);
+    vy_mm_s = HostProtocol_ReadI16(&frame->payload[2]);
+    wz_cdeg_s = HostProtocol_ReadI16(&frame->payload[4]);
+    Chassis_SetBodyVelocityEx((float)vx_mm_s, (float)vy_mm_s, ((float)wz_cdeg_s) / 100.0f, frame->payload[6]);
+    return ACK_OK;
+
+  case 0x06U:
+    /*
+     * CHASSIS_SET_WORLD_VELOCITY:
+     *   vx/vy use world axes; wz_cdeg_s > 0 counter-clockwise.
+     */
+    if (frame->payload_len != 7U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    vx_mm_s = HostProtocol_ReadI16(&frame->payload[0]);
+    vy_mm_s = HostProtocol_ReadI16(&frame->payload[2]);
+    wz_cdeg_s = HostProtocol_ReadI16(&frame->payload[4]);
+    motion_status = AdvanceMotion_SetWorldVelocityEx(
+        (float)vx_mm_s,
+        (float)vy_mm_s,
+        ((float)wz_cdeg_s) / 100.0f,
+        frame->payload[6]);
+    return (motion_status == ADVANCE_MOTION_STATUS_OK) ? ACK_OK : ACK_DENIED;
+
+  case 0x09U:
+    /* CHASSIS_RESET_WORLD_ORIGIN: no payload. */
+    if (frame->payload_len != 0U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    return (AdvanceWorld_ResetOrigin() == ADVANCE_WORLD_STATUS_OK) ? ACK_OK : ACK_DENIED;
 
   default:
     return ACK_UNKNOWN_CMD;

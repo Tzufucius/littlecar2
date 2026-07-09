@@ -2,6 +2,8 @@
 
 #include "drive_emm.h"
 
+#define CHASSIS_PI (3.14159265358979323846f)
+
 typedef struct
 {
   uint8_t id;
@@ -45,6 +47,66 @@ static int16_t Chassis_ClampSignedRpm(int32_t rpm)
   }
 
   return (int16_t)rpm;
+}
+
+static int32_t Chassis_AbsI32(int32_t value)
+{
+  return (value < 0) ? -value : value;
+}
+
+static int32_t Chassis_RoundFloatToI32(float value)
+{
+  return (value >= 0.0f) ? (int32_t)(value + 0.5f) : (int32_t)(value - 0.5f);
+}
+
+static int16_t Chassis_ScaleOneRpm(int32_t rpm, int32_t max_abs)
+{
+  if (max_abs <= (int32_t)CHASSIS_MAX_RPM)
+  {
+    return (int16_t)rpm;
+  }
+
+  if (rpm >= 0)
+  {
+    return (int16_t)(((int64_t)rpm * (int32_t)CHASSIS_MAX_RPM + (max_abs / 2)) / max_abs);
+  }
+
+  return (int16_t)(-(((int64_t)(-rpm) * (int32_t)CHASSIS_MAX_RPM + (max_abs / 2)) / max_abs));
+}
+
+static void Chassis_ScaleWheelRpm(int32_t *lf, int32_t *rf, int32_t *lr, int32_t *rr)
+{
+  int32_t max_abs = Chassis_AbsI32(*lf);
+  int32_t abs_value = Chassis_AbsI32(*rf);
+
+  if (abs_value > max_abs)
+  {
+    max_abs = abs_value;
+  }
+  abs_value = Chassis_AbsI32(*lr);
+  if (abs_value > max_abs)
+  {
+    max_abs = abs_value;
+  }
+  abs_value = Chassis_AbsI32(*rr);
+  if (abs_value > max_abs)
+  {
+    max_abs = abs_value;
+  }
+
+  if (max_abs > (int32_t)CHASSIS_MAX_RPM)
+  {
+    *lf = Chassis_ScaleOneRpm(*lf, max_abs);
+    *rf = Chassis_ScaleOneRpm(*rf, max_abs);
+    *lr = Chassis_ScaleOneRpm(*lr, max_abs);
+    *rr = Chassis_ScaleOneRpm(*rr, max_abs);
+  }
+}
+
+static void Chassis_SetMotorRPMScaledEx(int32_t lf_rpm, int32_t rf_rpm, int32_t lr_rpm, int32_t rr_rpm, uint8_t acc)
+{
+  Chassis_ScaleWheelRpm(&lf_rpm, &rf_rpm, &lr_rpm, &rr_rpm);
+  Chassis_SetMotorRPMEx((int16_t)lf_rpm, (int16_t)rf_rpm, (int16_t)lr_rpm, (int16_t)rr_rpm, acc);
 }
 
 static void Chassis_WaitEmmUartReady(void)
@@ -121,6 +183,31 @@ void Chassis_SetMotorRPMEx(int16_t lf_rpm, int16_t rf_rpm, int16_t lr_rpm, int16
   Chassis_LoadMotorSpeed(&g_chassis_motors[3], rr_rpm, acc);
 
   Chassis_SendLoadedCommand();
+}
+
+void Chassis_SetBodyVelocity(float vx_right_mm_s, float vy_forward_mm_s, float wz_ccw_deg_s)
+{
+  Chassis_SetBodyVelocityEx(vx_right_mm_s, vy_forward_mm_s, wz_ccw_deg_s, CHASSIS_DEFAULT_ACC);
+}
+
+void Chassis_SetBodyVelocityEx(float vx_right_mm_s, float vy_forward_mm_s, float wz_ccw_deg_s, uint8_t acc)
+{
+  float vx = vx_right_mm_s * (float)CHASSIS_BODY_X_SIGN;
+  float vy = vy_forward_mm_s * (float)CHASSIS_BODY_Y_SIGN;
+  float wz_rad_s = wz_ccw_deg_s * (float)CHASSIS_BODY_WZ_SIGN * CHASSIS_PI / 180.0f;
+  float wheel_base = CHASSIS_HALF_LENGTH_MM + CHASSIS_HALF_WIDTH_MM;
+  float rpm_per_mm_s = (60.0f * CHASSIS_MOTOR_GEAR_RATIO) / (2.0f * CHASSIS_PI * CHASSIS_WHEEL_RADIUS_MM);
+  int32_t lf;
+  int32_t rf;
+  int32_t lr;
+  int32_t rr;
+
+  lf = Chassis_RoundFloatToI32((vy + vx - (wheel_base * wz_rad_s)) * rpm_per_mm_s);
+  rf = Chassis_RoundFloatToI32((vy - vx + (wheel_base * wz_rad_s)) * rpm_per_mm_s);
+  lr = Chassis_RoundFloatToI32((vy - vx - (wheel_base * wz_rad_s)) * rpm_per_mm_s);
+  rr = Chassis_RoundFloatToI32((vy + vx + (wheel_base * wz_rad_s)) * rpm_per_mm_s);
+
+  Chassis_SetMotorRPMScaledEx(lf, rf, lr, rr, acc);
 }
 
 void Chassis_Forward(uint16_t rpm)
@@ -246,12 +333,12 @@ void Chassis_MoveMecanumEx(int16_t forward_rpm, int16_t strafe_rpm, int16_t rota
    * forward 控制前后，strafe 控制左右平移，rotate 控制原地转向。
    * 单个电机的方向修正统一在 Chassis_LoadMotorSpeed() 中处理。
    */
-  int16_t lf = Chassis_ClampSignedRpm((int32_t)forward_rpm + strafe_rpm + rotate_rpm);
-  int16_t rf = Chassis_ClampSignedRpm((int32_t)forward_rpm - strafe_rpm - rotate_rpm);
-  int16_t lr = Chassis_ClampSignedRpm((int32_t)forward_rpm - strafe_rpm + rotate_rpm);
-  int16_t rr = Chassis_ClampSignedRpm((int32_t)forward_rpm + strafe_rpm - rotate_rpm);
+  int32_t lf = (int32_t)forward_rpm + strafe_rpm + rotate_rpm;
+  int32_t rf = (int32_t)forward_rpm - strafe_rpm - rotate_rpm;
+  int32_t lr = (int32_t)forward_rpm - strafe_rpm + rotate_rpm;
+  int32_t rr = (int32_t)forward_rpm + strafe_rpm - rotate_rpm;
 
-  Chassis_SetMotorRPMEx(lf, rf, lr, rr, acc);
+  Chassis_SetMotorRPMScaledEx(lf, rf, lr, rr, acc);
 }
 
 void Chassis_MoveMecanumPreset(void)

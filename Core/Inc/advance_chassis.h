@@ -33,6 +33,24 @@ extern "C"
 #define CHASSIS_UART_WAIT_TIMEOUT_MS ((uint32_t)20U)
 
 /*
+ * Body velocity axis convention:
+ *   +X: right, +Y: forward, +WZ: counter-clockwise when viewed from above.
+ * Change one sign to reverse that motion axis without touching control code.
+ */
+#define CHASSIS_BODY_X_SIGN (1)
+#define CHASSIS_BODY_Y_SIGN (1)
+#define CHASSIS_BODY_WZ_SIGN (1)
+
+/*
+ * Physical chassis parameters for mm/s and deg/s conversion.
+ * Measure and calibrate these values on the real chassis before high-speed use.
+ */
+#define CHASSIS_WHEEL_RADIUS_MM (48.0f)
+#define CHASSIS_HALF_LENGTH_MM (110.0f)
+#define CHASSIS_HALF_WIDTH_MM (90.0f)
+#define CHASSIS_MOTOR_GEAR_RATIO (1.0f)
+
+/*
  * 各运动动作的平滑移动预设参数。
  * acc 越大响应越快；acc 越小启动和变速越平滑。
  */
@@ -82,6 +100,14 @@ extern "C"
      * acc 会传给 Emm 速度模式；在 Emm 协议中，0 表示直接启动。
      */
     void Chassis_SetMotorRPMEx(int16_t lf_rpm, int16_t rf_rpm, int16_t lr_rpm, int16_t rr_rpm, uint8_t acc);
+
+    /*
+     * Set chassis velocity with physical units.
+     * vx_right_mm_s > 0: move right; vy_forward_mm_s > 0: move forward.
+     * wz_ccw_deg_s > 0: rotate counter-clockwise when viewed from above.
+     */
+    void Chassis_SetBodyVelocity(float vx_right_mm_s, float vy_forward_mm_s, float wz_ccw_deg_s);
+    void Chassis_SetBodyVelocityEx(float vx_right_mm_s, float vy_forward_mm_s, float wz_ccw_deg_s, uint8_t acc);
 
     /*
      * 前进。
