@@ -160,19 +160,7 @@
 - 若输出 `PC ERR code=0x...`、`JETSON ERR code=0x...` 或 WIT Frame Error，优先检查波特率、TX/RX 交叉、共地、电平、串口设备名和串口占用。
 - 当前 README 只描述下位机工程结构和模块边界，不替代 `docs/` 中的具体协议文档。
 
-## 7. 开发约束（重要）
-
-- **仅允许阅读和修改三个文件夹下的代码内容，`Core`、`jetson`、`MDK-ARM`**
-- 代码应写在 CubeMX 预留的 `USER CODE` 区域，避免再次生成代码时丢失。
-- 不得直接修改硬件配置；如需调整引脚、DMA、NVIC 或串口参数，应先说明需要用户在 CubeMX 中修改。
-- 外设驱动和业务流程必须分层，不要把流程动作直接写入底层协议模块。
-- 新增模块必须优先判断归属前缀：传感器用 `sensor_`，控制驱动用 `drive_`，高级方法用 `advance_`，通信用 `comm_`，车辆自身属性用 `car_`。
-- 每个目录下的说明文档需要随着模块演进同步更新。
-- 本工程通常不在 Codex 环境内编译，下位机运行由用户手动上板测试。
-- 代码编写保持简洁，优先实现用户指定的最小例程，不额外加入复杂验证链路。
-- Git 仓库根目录位于 `F:\Project\littleCar2\zhengdian\4-29\.git`。
-
-## 8. 世界速度与方向配置
+## 7. 世界速度与方向配置
 
 底盘现在保留原有 RPM 调试接口，并新增物理速度接口：
 
@@ -195,9 +183,9 @@
 
 实车调试建议先低速确认：单轮 ID、前进、右移、逆时针旋转，再验证 world `+Y` 在不同 yaw 下方向保持一致。
 
-## 9. GotoPose 异步目标点控制
+## 8. GotoPose 异步目标点控制
 
-本次新增 `advance_motion` 目标点状态机，但不修改 `main.c` 测试逻辑。模块只提供 `AdvanceMotion_Poll()` 调度入口；实车接入时需要在主循环中周期调用，目标才会持续推进。
+`advance_motion` 提供 world 坐标下的异步目标点控制。上位机发送 `CHASSIS_GOTO_POSE` 后，ACK 只表示目标已接收；是否到达需要通过 `CHASSIS_GET_MOTION_STATUS` 查询。
 
 新增接口：
 
@@ -207,32 +195,6 @@
 - `AdvanceMotion_Cancel()`：取消当前目标并平滑停车。
 - `AdvanceMotion_GetStatus()`：读取状态、当前位姿、误差和活动目标摘要。
 
-状态机状态：
-
-| 状态 | 含义 |
-| --- | --- |
-| `ADVANCE_MOTION_STATE_IDLE` | 空闲 |
-| `ADVANCE_MOTION_STATE_RUNNING` | 正在执行目标 |
-| `ADVANCE_MOTION_STATE_ARRIVED` | 到达并保持满足阈值 |
-| `ADVANCE_MOTION_STATE_TIMEOUT` | 超过目标超时时间 |
-| `ADVANCE_MOTION_STATE_NO_POSE` | 位姿无效或超时 |
-| `ADVANCE_MOTION_STATE_NO_ORIGIN` | world 原点未建立 |
-| `ADVANCE_MOTION_STATE_CANCELED` | 被取消或被直接速度命令打断 |
-
-控制参数集中在 `Core/Inc/advance_motion.h`：
-
-- `ADVANCE_MOTION_CONTROL_PERIOD_MS = 20`
-- `ADVANCE_MOTION_KP_POS = 1.0f`
-- `ADVANCE_MOTION_KP_YAW = 2.0f`
-- `ADVANCE_MOTION_POS_TOLERANCE_MM = 20.0f`
-- `ADVANCE_MOTION_YAW_TOLERANCE_DEG = 2.0f`
-- `ADVANCE_MOTION_ARRIVE_HOLD_MS = 150`
-- `ADVANCE_MOTION_POSE_TIMEOUT_MS = 100`
-- `ADVANCE_MOTION_DEFAULT_VMAX_MM_S = 200.0f`
-- `ADVANCE_MOTION_DEFAULT_WMAX_DEG_S = 90.0f`
-
-Yaw 控制默认由目标 `goal_flags` 决定。设置 `ADVANCE_MOTION_GOAL_USE_YAW` 时，状态机同时控制目标 yaw；不设置时只控制 x/y，`wz` 输出为 0。
-
 协议新增底盘命令：
 
 | CmdID | 命令 | Payload 长度 | 说明 |
@@ -241,17 +203,16 @@ Yaw 控制默认由目标 `goal_flags` 决定。设置 `ADVANCE_MOTION_GOAL_USE_
 | `0x08` | `CHASSIS_CANCEL_GOAL` | 0 | 取消当前目标并平滑停车 |
 | `0x0B` | `CHASSIS_GET_MOTION_STATUS` | 0 | ACK 后返回 `MSG_DATA` 状态包 |
 
-`CHASSIS_GOTO_POSE` Payload：
+当前实现不修改 `main.c` 测试逻辑，只提供 `AdvanceMotion_Poll()` 调度入口。坐标系、速度变换、GotoPose 运算逻辑和协议字段详见 `docs/坐标系与GotoPose使用说明.md` 与 `docs/上下位机通信协议.md`。
 
-| 偏移 | 字段 | 类型 | 单位 |
-| ---: | --- | --- | --- |
-| 0 | `x_mm` | `int32_t` | mm |
-| 4 | `y_mm` | `int32_t` | mm |
-| 8 | `yaw_cdeg` | `int32_t` | 0.01 deg |
-| 12 | `vmax_mm_s` | `int16_t` | mm/s |
-| 14 | `wmax_cdeg_s` | `int16_t` | 0.01 deg/s |
-| 16 | `timeout_ms` | `uint32_t` | ms |
-| 20 | `goal_flags` | `uint8_t` | bit0 表示启用 yaw |
-| 21 | `acc` | `uint8_t` | Emm 加速度参数 |
+## 9. 开发约束（重要）
 
-状态查询 `0x0B` 会先返回 ACK，再返回同 `Seq/CmdSet/CmdID` 的 `MSG_DATA`，包含状态、active 标志、目标摘要、当前 world 位姿、位置误差、yaw 误差、elapsed、timeout 和更新时间。`0x0A` 预留给后续 world pose 查询。
+- **仅允许阅读和修改三个文件夹下的代码内容，`Core`、`jetson`、`MDK-ARM`**
+- 代码应写在 CubeMX 预留的 `USER CODE` 区域，避免再次生成代码时丢失。
+- 不得直接修改硬件配置；如需调整引脚、DMA、NVIC 或串口参数，应先说明需要用户在 CubeMX 中修改。
+- 外设驱动和业务流程必须分层，不要把流程动作直接写入底层协议模块。
+- 新增模块必须优先判断归属前缀：传感器用 `sensor_`，控制驱动用 `drive_`，高级方法用 `advance_`，通信用 `comm_`，车辆自身属性用 `car_`。
+- 每个目录下的说明文档需要随着模块演进同步更新。
+- 本工程通常不在 Codex 环境内编译，下位机运行由用户手动上板测试。
+- 代码编写保持简洁，优先实现用户指定的最小例程，不额外加入复杂验证链路。
+- Git 仓库根目录位于 `F:\Project\littleCar2\zhengdian\4-29\.git`。
