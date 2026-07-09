@@ -1,3 +1,9 @@
-~$资源规划.xlsx
+# 索引配置
 .codegraph/
 .cursor/
+
+# 临时计划文本
+MDK-ARM/docs/temp/  
+
+# 临时文件
+~$资源规划.xlsx
