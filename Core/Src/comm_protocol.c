@@ -19,16 +19,16 @@
  * - CRC 使用 CRC16-Modbus，从 Version 字节开始计算，到 Payload 最后一个字节结束。
  * - 中断 / DMA 回调只负责喂入字节流，命令执行统一放在 HostProtocol_Poll()。
  */
-#define comm_protocol_HEADER1          ((uint8_t)0x5AU)
-#define comm_protocol_HEADER2          ((uint8_t)0xA5U)
-#define comm_protocol_VERSION          ((uint8_t)0x01U)
-#define comm_protocol_HEADER_LEN       ((uint16_t)9U)
-#define comm_protocol_CRC_LEN          ((uint16_t)2U)
-#define comm_protocol_MAX_PAYLOAD      ((uint16_t)255U)
-#define comm_protocol_MAX_FRAME_LEN    (comm_protocol_HEADER_LEN + comm_protocol_MAX_PAYLOAD + comm_protocol_CRC_LEN)
-#define comm_protocol_QUEUE_SIZE       ((uint8_t)4U)
-#define comm_protocol_TX_TIMEOUT_MS    ((uint32_t)20U)
-#define comm_protocol_HEARTBEAT_MS     ((uint32_t)300U)
+#define comm_protocol_HEADER1 ((uint8_t)0x5AU)
+#define comm_protocol_HEADER2 ((uint8_t)0xA5U)
+#define comm_protocol_VERSION ((uint8_t)0x01U)
+#define comm_protocol_HEADER_LEN ((uint16_t)9U)
+#define comm_protocol_CRC_LEN ((uint16_t)2U)
+#define comm_protocol_MAX_PAYLOAD ((uint16_t)255U)
+#define comm_protocol_MAX_FRAME_LEN (comm_protocol_HEADER_LEN + comm_protocol_MAX_PAYLOAD + comm_protocol_CRC_LEN)
+#define comm_protocol_QUEUE_SIZE ((uint8_t)4U)
+#define comm_protocol_TX_TIMEOUT_MS ((uint32_t)20U)
+#define comm_protocol_HEARTBEAT_MS ((uint32_t)300U)
 
 typedef enum
 {
@@ -316,33 +316,33 @@ static HostProtocol_AckResult_t HostProtocol_HandleSystem(const HostProtocol_Fra
 {
   switch (frame->cmd_id)
   {
-    case 0x01U:
-      /* SYS_PING：无 Payload，只用于确认协议链路和 ACK。 */
-      return (frame->payload_len == 0U) ? ACK_OK : ACK_BAD_LENGTH;
+  case 0x01U:
+    /* SYS_PING：无 Payload，只用于确认协议链路和 ACK。 */
+    return (frame->payload_len == 0U) ? ACK_OK : ACK_BAD_LENGTH;
 
-    case 0x02U:
-      /* SYS_HEARTBEAT：Payload 为 uint32_t 上位机时间戳，当前只用于刷新在线状态。 */
-      if (frame->payload_len != 4U)
-      {
-        return ACK_BAD_LENGTH;
-      }
-      (void)HostProtocol_ReadU32(frame->payload);
-      g_last_heartbeat_tick = HAL_GetTick();
-      g_heartbeat_seen = 1U;
-      g_heartbeat_online = 1U;
-      return ACK_OK;
+  case 0x02U:
+    /* SYS_HEARTBEAT：Payload 为 uint32_t 上位机时间戳，当前只用于刷新在线状态。 */
+    if (frame->payload_len != 4U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    (void)HostProtocol_ReadU32(frame->payload);
+    g_last_heartbeat_tick = HAL_GetTick();
+    g_heartbeat_seen = 1U;
+    g_heartbeat_online = 1U;
+    return ACK_OK;
 
-    case 0x03U:
-      /* SYS_SET_MODE：预留控制模式，当前只保存值，不改变执行逻辑。 */
-      if (frame->payload_len != 1U)
-      {
-        return ACK_BAD_LENGTH;
-      }
-      g_control_mode = frame->payload[0];
-      return ACK_OK;
+  case 0x03U:
+    /* SYS_SET_MODE：预留控制模式，当前只保存值，不改变执行逻辑。 */
+    if (frame->payload_len != 1U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    g_control_mode = frame->payload[0];
+    return ACK_OK;
 
-    default:
-      return ACK_UNKNOWN_CMD;
+  default:
+    return ACK_UNKNOWN_CMD;
   }
 }
 
@@ -351,48 +351,48 @@ static HostProtocol_AckResult_t HostProtocol_HandleSafety(const HostProtocol_Fra
 {
   switch (frame->cmd_id)
   {
-    case 0x01U:
-      /* SAFETY_ESTOP：锁定安全状态并立即停车。 */
-      if (frame->payload_len != 1U)
-      {
-        return ACK_BAD_LENGTH;
-      }
-      (void)frame->payload[0];
-      g_safety_latched = 1U;
+  case 0x01U:
+    /* SAFETY_ESTOP：锁定安全状态并立即停车。 */
+    if (frame->payload_len != 1U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    (void)frame->payload[0];
+    g_safety_latched = 1U;
+    Chassis_Stop();
+    return ACK_OK;
+
+  case 0x02U:
+    /* SAFETY_SAFE_STOP：mode=0 平滑停止，mode=1 立即停止。 */
+    if (frame->payload_len != 1U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    if (frame->payload[0] == 0U)
+    {
+      Chassis_SmoothStop(CHASSIS_DEFAULT_ACC);
+    }
+    else if (frame->payload[0] == 1U)
+    {
       Chassis_Stop();
-      return ACK_OK;
+    }
+    else
+    {
+      return ACK_BAD_PARAM;
+    }
+    return ACK_OK;
 
-    case 0x02U:
-      /* SAFETY_SAFE_STOP：mode=0 平滑停止，mode=1 立即停止。 */
-      if (frame->payload_len != 1U)
-      {
-        return ACK_BAD_LENGTH;
-      }
-      if (frame->payload[0] == 0U)
-      {
-        Chassis_SmoothStop(CHASSIS_DEFAULT_ACC);
-      }
-      else if (frame->payload[0] == 1U)
-      {
-        Chassis_Stop();
-      }
-      else
-      {
-        return ACK_BAD_PARAM;
-      }
-      return ACK_OK;
+  case 0x03U:
+    /* SAFETY_CLEAR：清除可恢复安全锁定，后续普通底盘命令可继续执行。 */
+    if (frame->payload_len != 0U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    g_safety_latched = 0U;
+    return ACK_OK;
 
-    case 0x03U:
-      /* SAFETY_CLEAR：清除可恢复安全锁定，后续普通底盘命令可继续执行。 */
-      if (frame->payload_len != 0U)
-      {
-        return ACK_BAD_LENGTH;
-      }
-      g_safety_latched = 0U;
-      return ACK_OK;
-
-    default:
-      return ACK_UNKNOWN_CMD;
+  default:
+    return ACK_UNKNOWN_CMD;
   }
 }
 
@@ -418,88 +418,88 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
 
   switch (frame->cmd_id)
   {
-    case 0x01U:
-      /* CHASSIS_ENABLE：Payload[0] = 0 禁用，1 使能。 */
-      if (frame->payload_len != 1U)
-      {
-        return ACK_BAD_LENGTH;
-      }
-      if (frame->payload[0] > 1U)
-      {
-        return ACK_BAD_PARAM;
-      }
-      Chassis_Enable(frame->payload[0] != 0U);
-      return ACK_OK;
+  case 0x01U:
+    /* CHASSIS_ENABLE：Payload[0] = 0 禁用，1 使能。 */
+    if (frame->payload_len != 1U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    if (frame->payload[0] > 1U)
+    {
+      return ACK_BAD_PARAM;
+    }
+    Chassis_Enable(frame->payload[0] != 0U);
+    return ACK_OK;
 
-    case 0x02U:
-      /* CHASSIS_STOP：Payload[0] = 0 平滑停止，1 立即停止。 */
-      if (frame->payload_len != 1U)
-      {
-        return ACK_BAD_LENGTH;
-      }
-      if (frame->payload[0] == 0U)
-      {
-        Chassis_SmoothStop(CHASSIS_DEFAULT_ACC);
-      }
-      else if (frame->payload[0] == 1U)
-      {
-        Chassis_Stop();
-      }
-      else
-      {
-        return ACK_BAD_PARAM;
-      }
-      return ACK_OK;
+  case 0x02U:
+    /* CHASSIS_STOP：Payload[0] = 0 平滑停止，1 立即停止。 */
+    if (frame->payload_len != 1U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    if (frame->payload[0] == 0U)
+    {
+      Chassis_SmoothStop(CHASSIS_DEFAULT_ACC);
+    }
+    else if (frame->payload[0] == 1U)
+    {
+      Chassis_Stop();
+    }
+    else
+    {
+      return ACK_BAD_PARAM;
+    }
+    return ACK_OK;
 
-    case 0x03U:
-      /*
-       * CHASSIS_SET_MOTOR_RPM：
-       *   lf_rpm, rf_rpm, lr_rpm, rr_rpm 为 int16_t 小端，单位 RPM。
-       *   acc 为 Emm 加速度参数。
-       */
-      if (frame->payload_len != 9U)
-      {
-        return ACK_BAD_LENGTH;
-      }
-      lf_rpm = HostProtocol_ReadI16(&frame->payload[0]);
-      rf_rpm = HostProtocol_ReadI16(&frame->payload[2]);
-      lr_rpm = HostProtocol_ReadI16(&frame->payload[4]);
-      rr_rpm = HostProtocol_ReadI16(&frame->payload[6]);
-      if ((HostProtocol_AbsRpmTooLarge(lf_rpm) != 0U) ||
-          (HostProtocol_AbsRpmTooLarge(rf_rpm) != 0U) ||
-          (HostProtocol_AbsRpmTooLarge(lr_rpm) != 0U) ||
-          (HostProtocol_AbsRpmTooLarge(rr_rpm) != 0U))
-      {
-        return ACK_BAD_PARAM;
-      }
-      Chassis_SetMotorRPMEx(lf_rpm, rf_rpm, lr_rpm, rr_rpm, frame->payload[8]);
-      return ACK_OK;
+  case 0x03U:
+    /*
+     * CHASSIS_SET_MOTOR_RPM：
+     *   lf_rpm, rf_rpm, lr_rpm, rr_rpm 为 int16_t 小端，单位 RPM。
+     *   acc 为 Emm 加速度参数。
+     */
+    if (frame->payload_len != 9U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    lf_rpm = HostProtocol_ReadI16(&frame->payload[0]);
+    rf_rpm = HostProtocol_ReadI16(&frame->payload[2]);
+    lr_rpm = HostProtocol_ReadI16(&frame->payload[4]);
+    rr_rpm = HostProtocol_ReadI16(&frame->payload[6]);
+    if ((HostProtocol_AbsRpmTooLarge(lf_rpm) != 0U) ||
+        (HostProtocol_AbsRpmTooLarge(rf_rpm) != 0U) ||
+        (HostProtocol_AbsRpmTooLarge(lr_rpm) != 0U) ||
+        (HostProtocol_AbsRpmTooLarge(rr_rpm) != 0U))
+    {
+      return ACK_BAD_PARAM;
+    }
+    Chassis_SetMotorRPMEx(lf_rpm, rf_rpm, lr_rpm, rr_rpm, frame->payload[8]);
+    return ACK_OK;
 
-    case 0x04U:
-      /*
-       * CHASSIS_MOVE_MECANUM：
-       *   forward_rpm > 0 前进
-       *   strafe_rpm  > 0 右平移
-       *   rotate_rpm  > 0 右旋
-       */
-      if (frame->payload_len != 7U)
-      {
-        return ACK_BAD_LENGTH;
-      }
-      forward_rpm = HostProtocol_ReadI16(&frame->payload[0]);
-      strafe_rpm = HostProtocol_ReadI16(&frame->payload[2]);
-      rotate_rpm = HostProtocol_ReadI16(&frame->payload[4]);
-      if ((HostProtocol_AbsRpmTooLarge(forward_rpm) != 0U) ||
-          (HostProtocol_AbsRpmTooLarge(strafe_rpm) != 0U) ||
-          (HostProtocol_AbsRpmTooLarge(rotate_rpm) != 0U))
-      {
-        return ACK_BAD_PARAM;
-      }
-      Chassis_MoveMecanumEx(forward_rpm, strafe_rpm, rotate_rpm, frame->payload[6]);
-      return ACK_OK;
+  case 0x04U:
+    /*
+     * CHASSIS_MOVE_MECANUM：
+     *   forward_rpm > 0 前进
+     *   strafe_rpm  > 0 右平移
+     *   rotate_rpm  > 0 右旋
+     */
+    if (frame->payload_len != 7U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    forward_rpm = HostProtocol_ReadI16(&frame->payload[0]);
+    strafe_rpm = HostProtocol_ReadI16(&frame->payload[2]);
+    rotate_rpm = HostProtocol_ReadI16(&frame->payload[4]);
+    if ((HostProtocol_AbsRpmTooLarge(forward_rpm) != 0U) ||
+        (HostProtocol_AbsRpmTooLarge(strafe_rpm) != 0U) ||
+        (HostProtocol_AbsRpmTooLarge(rotate_rpm) != 0U))
+    {
+      return ACK_BAD_PARAM;
+    }
+    Chassis_MoveMecanumEx(forward_rpm, strafe_rpm, rotate_rpm, frame->payload[6]);
+    return ACK_OK;
 
-    default:
-      return ACK_UNKNOWN_CMD;
+  default:
+    return ACK_UNKNOWN_CMD;
   }
 }
 
@@ -513,17 +513,17 @@ static HostProtocol_AckResult_t HostProtocol_HandleCommand(const HostProtocol_Fr
 
   switch (frame->cmd_set)
   {
-    case CMDSET_SYSTEM:
-      return HostProtocol_HandleSystem(frame);
+  case CMDSET_SYSTEM:
+    return HostProtocol_HandleSystem(frame);
 
-    case CMDSET_SAFETY:
-      return HostProtocol_HandleSafety(frame);
+  case CMDSET_SAFETY:
+    return HostProtocol_HandleSafety(frame);
 
-    case CMDSET_CHASSIS:
-      return HostProtocol_HandleChassis(frame);
+  case CMDSET_CHASSIS:
+    return HostProtocol_HandleChassis(frame);
 
-    default:
-      return ACK_UNKNOWN_CMD;
+  default:
+    return ACK_UNKNOWN_CMD;
   }
 }
 

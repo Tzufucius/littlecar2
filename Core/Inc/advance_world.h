@@ -2,7 +2,8 @@
 #define __ADVANCE_WORLD_H__
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 #include <stdint.h>
@@ -16,53 +17,53 @@ extern "C" {
 #define ADVANCE_WORLD_OPS_YAW_REVERSED ((uint8_t)0U)
 #define ADVANCE_WORLD_WIT_YAW_REVERSED ((uint8_t)0U)
 
-typedef enum
-{
-  ADVANCE_WORLD_STATUS_OK = 0,
-  ADVANCE_WORLD_STATUS_NOT_READY,
-  ADVANCE_WORLD_STATUS_NO_OPS,
-  ADVANCE_WORLD_STATUS_NO_ORIGIN
-} AdvanceWorld_Status_t;
+  typedef enum
+  {
+    ADVANCE_WORLD_STATUS_OK = 0,
+    ADVANCE_WORLD_STATUS_NOT_READY,
+    ADVANCE_WORLD_STATUS_NO_OPS,
+    ADVANCE_WORLD_STATUS_NO_ORIGIN
+  } AdvanceWorld_Status_t;
 
-typedef struct
-{
-  float x_mm;
-  float y_mm;
-  float yaw_deg;
-  uint32_t updated_tick;
-  uint8_t valid;
-  uint8_t origin_ready;
-} WorldPose2D_t;
+  typedef struct
+  {
+    float x_mm;
+    float y_mm;
+    float yaw_deg;
+    uint32_t updated_tick;
+    uint8_t valid;
+    uint8_t origin_ready;
+  } WorldPose2D_t;
 
-typedef struct
-{
-  float x_mm;
-  float y_mm;
-  float yaw_deg;
-  float vmax_mm_s;
-  float wmax_deg_s;
-  uint32_t timeout_ms;
-  uint8_t goal_flags;
-} WorldGoalPose2D_t;
+  typedef struct
+  {
+    float x_mm;
+    float y_mm;
+    float yaw_deg;
+    float vmax_mm_s;
+    float wmax_deg_s;
+    uint32_t timeout_ms;
+    uint8_t goal_flags;
+  } WorldGoalPose2D_t;
 
-typedef struct
-{
-  float vx_mm_s;
-  float vy_mm_s;
-  float wz_deg_s;
-} WorldVelocity2D_t;
+  typedef struct
+  {
+    float vx_mm_s;
+    float vy_mm_s;
+    float wz_deg_s;
+  } WorldVelocity2D_t;
 
-void AdvanceWorld_Init(void);
-AdvanceWorld_Status_t AdvanceWorld_ResetOrigin(void);
-void AdvanceWorld_Poll(void);
-const volatile WorldPose2D_t *AdvanceWorld_GetPose(void);
-AdvanceWorld_Status_t AdvanceWorld_GetPoseCopy(WorldPose2D_t *pose);
+  void AdvanceWorld_Init(void);
+  AdvanceWorld_Status_t AdvanceWorld_ResetOrigin(void);
+  void AdvanceWorld_Poll(void);
+  const volatile WorldPose2D_t *AdvanceWorld_GetPose(void);
+  AdvanceWorld_Status_t AdvanceWorld_GetPoseCopy(WorldPose2D_t *pose);
 
-float AdvanceWorld_WrapAngleDeg(float angle_deg);
-float AdvanceWorld_LimitFloat(float value, float min_value, float max_value);
-void AdvanceWorld_WorldToBodyVelocity(float vx_w, float vy_w, float yaw_deg, float *vx_b, float *vy_b);
-void AdvanceWorld_BodyToWorldVelocity(float vx_b, float vy_b, float yaw_deg, float *vx_w, float *vy_w);
-void AdvanceWorld_PrintDebug(void);
+  float AdvanceWorld_WrapAngleDeg(float angle_deg);
+  float AdvanceWorld_LimitFloat(float value, float min_value, float max_value);
+  void AdvanceWorld_WorldToBodyVelocity(float vx_w, float vy_w, float yaw_deg, float *vx_b, float *vy_b);
+  void AdvanceWorld_BodyToWorldVelocity(float vx_b, float vy_b, float yaw_deg, float *vx_w, float *vy_w);
+  void AdvanceWorld_PrintDebug(void);
 
 #ifdef __cplusplus
 }

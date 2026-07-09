@@ -1,11 +1,11 @@
 #include "sensor_ops.h"
 
-#define OPS_FRAME_HEADER_FIRST   ((uint8_t)0x0DU)
-#define OPS_FRAME_HEADER_SECOND  ((uint8_t)0x0AU)
-#define OPS_FRAME_FOOTER_FIRST   ((uint8_t)0x0AU)
-#define OPS_FRAME_FOOTER_SECOND  ((uint8_t)0x0DU)
-#define OPS_FRAME_PAYLOAD_SIZE   ((uint16_t)24U)
-#define OPS_STALE_TIMEOUT_MS     ((uint32_t)500U)
+#define OPS_FRAME_HEADER_FIRST ((uint8_t)0x0DU)
+#define OPS_FRAME_HEADER_SECOND ((uint8_t)0x0AU)
+#define OPS_FRAME_FOOTER_FIRST ((uint8_t)0x0AU)
+#define OPS_FRAME_FOOTER_SECOND ((uint8_t)0x0DU)
+#define OPS_FRAME_PAYLOAD_SIZE ((uint16_t)24U)
+#define OPS_STALE_TIMEOUT_MS ((uint32_t)500U)
 
 typedef enum
 {
@@ -66,9 +66,9 @@ static void OPS_UpdatePose(void)
   g_ops_pose.zangle_deg = g_ops_payload.values[0];
   g_ops_pose.xangle_deg = g_ops_payload.values[1];
   g_ops_pose.yangle_deg = g_ops_payload.values[2];
-  g_ops_pose.pos_x_mm   = g_ops_payload.values[3];
-  g_ops_pose.pos_y_mm   = g_ops_payload.values[4];
-  g_ops_pose.w_z_dps    = g_ops_payload.values[5];
+  g_ops_pose.pos_x_mm = g_ops_payload.values[3];
+  g_ops_pose.pos_y_mm = g_ops_payload.values[4];
+  g_ops_pose.w_z_dps = g_ops_payload.values[5];
 
   g_ops_pose.updated_tick = HAL_GetTick();
   g_ops_pose.frame_count++;
@@ -130,80 +130,80 @@ static void OPS_HandleFrameByte(uint8_t byte)
 {
   switch (g_ops_parser_state)
   {
-    case OPS_PARSER_WAIT_HEADER_FIRST:
-      // 等待第一个帧头 0x0D
-      if (byte == OPS_FRAME_HEADER_FIRST)
-      {
-        g_ops_parser_state = OPS_PARSER_WAIT_HEADER_SECOND;
-      }
-      break;
+  case OPS_PARSER_WAIT_HEADER_FIRST:
+    // 等待第一个帧头 0x0D
+    if (byte == OPS_FRAME_HEADER_FIRST)
+    {
+      g_ops_parser_state = OPS_PARSER_WAIT_HEADER_SECOND;
+    }
+    break;
 
-    case OPS_PARSER_WAIT_HEADER_SECOND:
-      // 等待第二个帧头 0x0A
-      if (byte == OPS_FRAME_HEADER_SECOND)
-      {
-        g_ops_parser_state = OPS_PARSER_READ_PAYLOAD;
-        g_ops_payload_index = 0U;
-      }
-      else if (byte == OPS_FRAME_HEADER_FIRST)
-      {
-        // 如果连续收到两个 0x0D，保持在当前状态
-        g_ops_parser_state = OPS_PARSER_WAIT_HEADER_SECOND;
-      }
-      else
-      {
-        OPS_ResetParser();
-      }
-      break;
-
-    case OPS_PARSER_READ_PAYLOAD:
-      // 连续读取 24 字节的浮点数数据
-      g_ops_payload.bytes[g_ops_payload_index++] = byte;
-      if (g_ops_payload_index >= OPS_FRAME_PAYLOAD_SIZE)
-      {
-        g_ops_parser_state = OPS_PARSER_WAIT_FOOTER_FIRST;
-      }
-      break;
-
-    case OPS_PARSER_WAIT_FOOTER_FIRST:
-      // 等待第一个帧尾 0x0A
-      if (byte == OPS_FRAME_FOOTER_FIRST)
-      {
-        g_ops_parser_state = OPS_PARSER_WAIT_FOOTER_SECOND;
-      }
-      else if (byte == OPS_FRAME_HEADER_FIRST)
-      {
-        // 容错处理：如果意外收到新的帧头
-        g_ops_parser_state = OPS_PARSER_WAIT_HEADER_SECOND;
-      }
-      else
-      {
-        OPS_ResetParser();
-      }
-      break;
-
-    case OPS_PARSER_WAIT_FOOTER_SECOND:
-      // 等待第二个帧尾 0x0D，成功则更新位姿
-      if (byte == OPS_FRAME_FOOTER_SECOND)
-      {
-        OPS_UpdatePose();
-        OPS_ResetParser();
-      }
-      else if (byte == OPS_FRAME_HEADER_FIRST)
-      {
-        g_ops_parser_state = OPS_PARSER_WAIT_HEADER_SECOND;
-        g_ops_payload_index = 0U;
-      }
-      else
-      {
-        g_ops_last_status = OPS_STATUS_FRAME_ERROR;
-        OPS_ResetParser();
-      }
-      break;
-
-    default:
+  case OPS_PARSER_WAIT_HEADER_SECOND:
+    // 等待第二个帧头 0x0A
+    if (byte == OPS_FRAME_HEADER_SECOND)
+    {
+      g_ops_parser_state = OPS_PARSER_READ_PAYLOAD;
+      g_ops_payload_index = 0U;
+    }
+    else if (byte == OPS_FRAME_HEADER_FIRST)
+    {
+      // 如果连续收到两个 0x0D，保持在当前状态
+      g_ops_parser_state = OPS_PARSER_WAIT_HEADER_SECOND;
+    }
+    else
+    {
       OPS_ResetParser();
-      break;
+    }
+    break;
+
+  case OPS_PARSER_READ_PAYLOAD:
+    // 连续读取 24 字节的浮点数数据
+    g_ops_payload.bytes[g_ops_payload_index++] = byte;
+    if (g_ops_payload_index >= OPS_FRAME_PAYLOAD_SIZE)
+    {
+      g_ops_parser_state = OPS_PARSER_WAIT_FOOTER_FIRST;
+    }
+    break;
+
+  case OPS_PARSER_WAIT_FOOTER_FIRST:
+    // 等待第一个帧尾 0x0A
+    if (byte == OPS_FRAME_FOOTER_FIRST)
+    {
+      g_ops_parser_state = OPS_PARSER_WAIT_FOOTER_SECOND;
+    }
+    else if (byte == OPS_FRAME_HEADER_FIRST)
+    {
+      // 容错处理：如果意外收到新的帧头
+      g_ops_parser_state = OPS_PARSER_WAIT_HEADER_SECOND;
+    }
+    else
+    {
+      OPS_ResetParser();
+    }
+    break;
+
+  case OPS_PARSER_WAIT_FOOTER_SECOND:
+    // 等待第二个帧尾 0x0D，成功则更新位姿
+    if (byte == OPS_FRAME_FOOTER_SECOND)
+    {
+      OPS_UpdatePose();
+      OPS_ResetParser();
+    }
+    else if (byte == OPS_FRAME_HEADER_FIRST)
+    {
+      g_ops_parser_state = OPS_PARSER_WAIT_HEADER_SECOND;
+      g_ops_payload_index = 0U;
+    }
+    else
+    {
+      g_ops_last_status = OPS_STATUS_FRAME_ERROR;
+      OPS_ResetParser();
+    }
+    break;
+
+  default:
+    OPS_ResetParser();
+    break;
   }
 }
 

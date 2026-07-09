@@ -3,12 +3,12 @@
 #include <string.h>
 #include <main.h>
 
-#define drive_bus_servo_FRAME_HEADER             ((uint8_t)0xFF)
-#define drive_bus_servo_FRAME_WRITE_INSTRUCTION  ((uint8_t)0x03)
-#define drive_bus_servo_FRAME_START_ADDRESS      ((uint8_t)0x29)
-#define drive_bus_servo_FRAME_DATA_LENGTH        ((uint8_t)0x0A)
-#define drive_bus_servo_FRAME_TOTAL_LENGTH       ((uint16_t)14U)
-#define drive_bus_servo_UART_TIMEOUT_MS          ((uint32_t)100U)
+#define drive_bus_servo_FRAME_HEADER ((uint8_t)0xFF)
+#define drive_bus_servo_FRAME_WRITE_INSTRUCTION ((uint8_t)0x03)
+#define drive_bus_servo_FRAME_START_ADDRESS ((uint8_t)0x29)
+#define drive_bus_servo_FRAME_DATA_LENGTH ((uint8_t)0x0A)
+#define drive_bus_servo_FRAME_TOTAL_LENGTH ((uint16_t)14U)
+#define drive_bus_servo_UART_TIMEOUT_MS ((uint32_t)100U)
 
 static UART_HandleTypeDef *g_drive_bus_servo_uart = NULL;
 static volatile uint8_t g_drive_bus_servo_rx_byte = 0U;
@@ -17,30 +17,30 @@ static BusServo_Status_t g_drive_bus_servo_last_status = drive_bus_servo_STATUS_
 static uint8_t g_drive_bus_servo_last_frame[drive_bus_servo_FRAME_TOTAL_LENGTH] = {0};
 
 /**
-  * @brief  判断舵机 ID 是否落在当前协议允许的地址范围内。
-  * @param  id: 待检查舵机 ID。
-  * @retval `1` 表示有效，`0` 表示无效。
-  */
+ * @brief  判断舵机 ID 是否落在当前协议允许的地址范围内。
+ * @param  id: 待检查舵机 ID。
+ * @retval `1` 表示有效，`0` 表示无效。
+ */
 static uint8_t BusServo_IsValidId(uint8_t id)
 {
   return (id > drive_bus_servo_MIN_ID) && (id < drive_bus_servo_MAX_ID);
 }
 
 /**
-  * @brief  判断位置参数是否落在当前设备层允许的编码范围内。
-  * @param  position: 待检查位置值。
-  * @retval `1` 表示有效，`0` 表示无效。
-  */
+ * @brief  判断位置参数是否落在当前设备层允许的编码范围内。
+ * @param  position: 待检查位置值。
+ * @retval `1` 表示有效，`0` 表示无效。
+ */
 static uint8_t BusServo_IsValidPosition(int32_t position)
 {
   return (position > drive_bus_servo_MIN_POSITION) && (position < drive_bus_servo_MAX_POSITION);
 }
 
 /**
-  * @brief  按旧项目的规则将有符号位置值编码成协议中的 16 位字段。
-  * @param  position: 上层传入的位置参数。
-  * @retval 协议帧中使用的编码值。
-  */
+ * @brief  按旧项目的规则将有符号位置值编码成协议中的 16 位字段。
+ * @param  position: 上层传入的位置参数。
+ * @retval 协议帧中使用的编码值。
+ */
 static uint16_t BusServo_EncodePosition(int32_t position)
 {
   if (position < 0)
@@ -52,10 +52,10 @@ static uint16_t BusServo_EncodePosition(int32_t position)
 }
 
 /**
-  * @brief  对舵机控制帧的校验区间求和后按位取反，得到最终校验字节。
-  * @param  frame: 完整待发送帧缓冲区。
-  * @retval 计算得到的校验字节。
-  */
+ * @brief  对舵机控制帧的校验区间求和后按位取反，得到最终校验字节。
+ * @param  frame: 完整待发送帧缓冲区。
+ * @retval 计算得到的校验字节。
+ */
 static uint8_t BusServo_CalcChecksum(const uint8_t *frame)
 {
   uint8_t sum = 0U;
@@ -70,11 +70,11 @@ static uint8_t BusServo_CalcChecksum(const uint8_t *frame)
 }
 
 /**
-  * @brief  根据旧项目 `Servo_SendPositionAccelSpeedCommand()` 的格式组装一帧位置命令。
-  * @param  command: 结构化命令输入。
-  * @param  frame: 输出帧缓冲区，长度固定为 14 字节。
-  * @retval `drive_bus_servo_STATUS_OK` 表示组帧成功。
-  */
+ * @brief  根据旧项目 `Servo_SendPositionAccelSpeedCommand()` 的格式组装一帧位置命令。
+ * @param  command: 结构化命令输入。
+ * @param  frame: 输出帧缓冲区，长度固定为 14 字节。
+ * @retval `drive_bus_servo_STATUS_OK` 表示组帧成功。
+ */
 static BusServo_Status_t BusServo_BuildPositionFrame(const BusServo_Command_t *command,
                                                      uint8_t frame[drive_bus_servo_FRAME_TOTAL_LENGTH])
 {
@@ -120,10 +120,10 @@ static BusServo_Status_t BusServo_BuildPositionFrame(const BusServo_Command_t *c
 }
 
 /**
-  * @brief  通过当前绑定串口发送一帧舵机命令。
-  * @param  frame: 已经组装完成的完整协议帧。
-  * @retval 发送结果状态。
-  */
+ * @brief  通过当前绑定串口发送一帧舵机命令。
+ * @param  frame: 已经组装完成的完整协议帧。
+ * @retval 发送结果状态。
+ */
 static BusServo_Status_t BusServo_TransmitFrame(const uint8_t *frame)
 {
   if ((g_drive_bus_servo_uart == NULL) || (frame == NULL))
