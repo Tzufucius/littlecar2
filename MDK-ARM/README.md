@@ -194,3 +194,64 @@
 - `ADVANCE_WORLD_OPS_YAW_REVERSED` / `ADVANCE_WORLD_WIT_YAW_REVERSED`：OPS / WIT yaw 读数方向。
 
 实车调试建议先低速确认：单轮 ID、前进、右移、逆时针旋转，再验证 world `+Y` 在不同 yaw 下方向保持一致。
+
+## 9. GotoPose 异步目标点控制
+
+本次新增 `advance_motion` 目标点状态机，但不修改 `main.c` 测试逻辑。模块只提供 `AdvanceMotion_Poll()` 调度入口；实车接入时需要在主循环中周期调用，目标才会持续推进。
+
+新增接口：
+
+- `AdvanceMotion_GotoPose(const WorldGoalPose2D_t *goal)`：按默认加速度接收目标点。
+- `AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, uint8_t acc)`：接收目标点并指定 Emm 加速度参数。
+- `AdvanceMotion_Poll()`：异步状态机轮询，内部按 `ADVANCE_MOTION_CONTROL_PERIOD_MS` 自调度。
+- `AdvanceMotion_Cancel()`：取消当前目标并平滑停车。
+- `AdvanceMotion_GetStatus()`：读取状态、当前位姿、误差和活动目标摘要。
+
+状态机状态：
+
+| 状态 | 含义 |
+| --- | --- |
+| `ADVANCE_MOTION_STATE_IDLE` | 空闲 |
+| `ADVANCE_MOTION_STATE_RUNNING` | 正在执行目标 |
+| `ADVANCE_MOTION_STATE_ARRIVED` | 到达并保持满足阈值 |
+| `ADVANCE_MOTION_STATE_TIMEOUT` | 超过目标超时时间 |
+| `ADVANCE_MOTION_STATE_NO_POSE` | 位姿无效或超时 |
+| `ADVANCE_MOTION_STATE_NO_ORIGIN` | world 原点未建立 |
+| `ADVANCE_MOTION_STATE_CANCELED` | 被取消或被直接速度命令打断 |
+
+控制参数集中在 `Core/Inc/advance_motion.h`：
+
+- `ADVANCE_MOTION_CONTROL_PERIOD_MS = 20`
+- `ADVANCE_MOTION_KP_POS = 1.0f`
+- `ADVANCE_MOTION_KP_YAW = 2.0f`
+- `ADVANCE_MOTION_POS_TOLERANCE_MM = 20.0f`
+- `ADVANCE_MOTION_YAW_TOLERANCE_DEG = 2.0f`
+- `ADVANCE_MOTION_ARRIVE_HOLD_MS = 150`
+- `ADVANCE_MOTION_POSE_TIMEOUT_MS = 100`
+- `ADVANCE_MOTION_DEFAULT_VMAX_MM_S = 200.0f`
+- `ADVANCE_MOTION_DEFAULT_WMAX_DEG_S = 90.0f`
+
+Yaw 控制默认由目标 `goal_flags` 决定。设置 `ADVANCE_MOTION_GOAL_USE_YAW` 时，状态机同时控制目标 yaw；不设置时只控制 x/y，`wz` 输出为 0。
+
+协议新增底盘命令：
+
+| CmdID | 命令 | Payload 长度 | 说明 |
+| ---: | --- | ---: | --- |
+| `0x07` | `CHASSIS_GOTO_POSE` | 22 | 接收 world 目标点并启动异步状态机 |
+| `0x08` | `CHASSIS_CANCEL_GOAL` | 0 | 取消当前目标并平滑停车 |
+| `0x0B` | `CHASSIS_GET_MOTION_STATUS` | 0 | ACK 后返回 `MSG_DATA` 状态包 |
+
+`CHASSIS_GOTO_POSE` Payload：
+
+| 偏移 | 字段 | 类型 | 单位 |
+| ---: | --- | --- | --- |
+| 0 | `x_mm` | `int32_t` | mm |
+| 4 | `y_mm` | `int32_t` | mm |
+| 8 | `yaw_cdeg` | `int32_t` | 0.01 deg |
+| 12 | `vmax_mm_s` | `int16_t` | mm/s |
+| 14 | `wmax_cdeg_s` | `int16_t` | 0.01 deg/s |
+| 16 | `timeout_ms` | `uint32_t` | ms |
+| 20 | `goal_flags` | `uint8_t` | bit0 表示启用 yaw |
+| 21 | `acc` | `uint8_t` | Emm 加速度参数 |
+
+状态查询 `0x0B` 会先返回 ACK，再返回同 `Seq/CmdSet/CmdID` 的 `MSG_DATA`，包含状态、active 标志、目标摘要、当前 world 位姿、位置误差、yaw 误差、elapsed、timeout 和更新时间。`0x0A` 预留给后续 world pose 查询。
