@@ -3,17 +3,17 @@
 
 extern UART_HandleTypeDef huart2;
 
-#define WIT_DATA_TIMEOUT_MS     ((uint32_t)500U)
-#define WIT_RX_DMA_BUFFER_SIZE  ((uint16_t)128U)
-#define WIT_FRAME_LENGTH        ((uint16_t)11U)
-#define WIT_FRAME_HEADER        ((uint8_t)0x55U)
-#define WIT_FRAME_TYPE_ACCEL    ((uint8_t)0x51U)
-#define WIT_FRAME_TYPE_GYRO     ((uint8_t)0x52U)
-#define WIT_FRAME_TYPE_ANGLE    ((uint8_t)0x53U)
-#define WIT_PENDING_MAX_LENGTH  (WIT_FRAME_LENGTH - 1U)
-#define WIT_ACCEL_RANGE_G       (16.0f)
-#define WIT_GYRO_RANGE_DPS      (2000.0f)
-#define WIT_ANGLE_RANGE_DEG     (180.0f)
+#define WIT_DATA_TIMEOUT_MS ((uint32_t)500U)
+#define WIT_RX_DMA_BUFFER_SIZE ((uint16_t)128U)
+#define WIT_FRAME_LENGTH ((uint16_t)11U)
+#define WIT_FRAME_HEADER ((uint8_t)0x55U)
+#define WIT_FRAME_TYPE_ACCEL ((uint8_t)0x51U)
+#define WIT_FRAME_TYPE_GYRO ((uint8_t)0x52U)
+#define WIT_FRAME_TYPE_ANGLE ((uint8_t)0x53U)
+#define WIT_PENDING_MAX_LENGTH (WIT_FRAME_LENGTH - 1U)
+#define WIT_ACCEL_RANGE_G (16.0f)
+#define WIT_GYRO_RANGE_DPS (2000.0f)
+#define WIT_ANGLE_RANGE_DEG (180.0f)
 
 static volatile WIT_Data_t g_wit_data = {0};
 
@@ -100,20 +100,20 @@ static void WIT_ParseFrame(const uint8_t *frame)
 {
   switch (frame[1])
   {
-    case WIT_FRAME_TYPE_ACCEL:
-      WIT_ParseVectorFrame(frame, &g_wit_data.accel_g, WIT_ACCEL_RANGE_G);
-      break;
+  case WIT_FRAME_TYPE_ACCEL:
+    WIT_ParseVectorFrame(frame, &g_wit_data.accel_g, WIT_ACCEL_RANGE_G);
+    break;
 
-    case WIT_FRAME_TYPE_GYRO:
-      WIT_ParseVectorFrame(frame, &g_wit_data.gyro_dps, WIT_GYRO_RANGE_DPS);
-      break;
+  case WIT_FRAME_TYPE_GYRO:
+    WIT_ParseVectorFrame(frame, &g_wit_data.gyro_dps, WIT_GYRO_RANGE_DPS);
+    break;
 
-    case WIT_FRAME_TYPE_ANGLE:
-      WIT_ParseVectorFrame(frame, &g_wit_data.angle_deg, WIT_ANGLE_RANGE_DEG);
-      break;
+  case WIT_FRAME_TYPE_ANGLE:
+    WIT_ParseVectorFrame(frame, &g_wit_data.angle_deg, WIT_ANGLE_RANGE_DEG);
+    break;
 
-    default:
-      break;
+  default:
+    break;
   }
 }
 

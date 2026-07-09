@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#define comm_jetson_RX_DMA_BUFFER_SIZE  ((uint16_t)256U)
-#define comm_jetson_PRINT_BUFFER_SIZE   ((uint16_t)256U)
+#define comm_jetson_RX_DMA_BUFFER_SIZE ((uint16_t)256U)
+#define comm_jetson_PRINT_BUFFER_SIZE ((uint16_t)256U)
 
 static UART_HandleTypeDef *g_comm_jetson_uart = NULL;
 static uint8_t g_jetson_rx_dma_buffer[comm_jetson_RX_DMA_BUFFER_SIZE] = {0};

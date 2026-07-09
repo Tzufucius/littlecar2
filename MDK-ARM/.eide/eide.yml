@@ -47,6 +47,8 @@ virtualFolder:
                 - path: ../Core/Src/sensor_wit.c
                 - path: ../Core/Src/advance_world.c
                 - path: ../Core/Inc/advance_world.h
+                - path: ../Core/Inc/advance_motion.h
+                - path: ../Core/Src/advance_motion.c
               folders: []
     - name: Drivers
       files: []

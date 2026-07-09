@@ -2,6 +2,7 @@
 
 ## 1. 项目说明
 
+仓库地址：https://github.com/Tuzfucius/littlecar2
 本工程基于 STM32F407ZGT6 和 HAL 库，用于管理底盘电机、总线舵机、WIT IMU、OPS 定位系统，以及 PC / Jetson 上位机通信。
 我们使用有4个步进电机来控制底盘的前进后退等移动运动。由三个舵机来控制一些旋转的运动，包括夹爪的开合物料盘的旋转以及机械臂的旋转。
 
@@ -159,7 +160,52 @@
 - 若输出 `PC ERR code=0x...`、`JETSON ERR code=0x...` 或 WIT Frame Error，优先检查波特率、TX/RX 交叉、共地、电平、串口设备名和串口占用。
 - 当前 README 只描述下位机工程结构和模块边界，不替代 `docs/` 中的具体协议文档。
 
-## 7. 开发约束（重要）
+## 7. 世界速度与方向配置
+
+底盘现在保留原有 RPM 调试接口，并新增物理速度接口：
+
+- `Chassis_SetBodyVelocityEx(vx_right_mm_s, vy_forward_mm_s, wz_ccw_deg_s, acc)`
+- `AdvanceMotion_SetWorldVelocityEx(vx_world_mm_s, vy_world_mm_s, wz_ccw_deg_s, acc)`
+
+方向约定：
+
+- `vx_right_mm_s > 0`：车体向右。
+- `vy_forward_mm_s > 0`：车体向前。
+- `wz_ccw_deg_s > 0`：俯视逆时针旋转。
+
+若实车方向与约定相反，优先调整 `Core/Inc/advance_chassis.h` 中的编译期宏：
+
+- `CHASSIS_MOTOR_*_SIGN`：单个电机正反方向。
+- `CHASSIS_BODY_X_SIGN`：整体右移方向。
+- `CHASSIS_BODY_Y_SIGN`：整体前进方向。
+- `CHASSIS_BODY_WZ_SIGN`：整体逆时针旋转方向。
+- `ADVANCE_WORLD_OPS_YAW_REVERSED` / `ADVANCE_WORLD_WIT_YAW_REVERSED`：OPS / WIT yaw 读数方向。
+
+实车调试建议先低速确认：单轮 ID、前进、右移、逆时针旋转，再验证 world `+Y` 在不同 yaw 下方向保持一致。
+
+## 8. GotoPose 异步目标点控制
+
+`advance_motion` 提供 world 坐标下的异步目标点控制。上位机发送 `CHASSIS_GOTO_POSE` 后，ACK 只表示目标已接收；是否到达需要通过 `CHASSIS_GET_MOTION_STATUS` 查询。
+
+新增接口：
+
+- `AdvanceMotion_GotoPose(const WorldGoalPose2D_t *goal)`：按默认加速度接收目标点。
+- `AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, uint8_t acc)`：接收目标点并指定 Emm 加速度参数。
+- `AdvanceMotion_Poll()`：异步状态机轮询，内部按 `ADVANCE_MOTION_CONTROL_PERIOD_MS` 自调度。
+- `AdvanceMotion_Cancel()`：取消当前目标并平滑停车。
+- `AdvanceMotion_GetStatus()`：读取状态、当前位姿、误差和活动目标摘要。
+
+协议新增底盘命令：
+
+| CmdID | 命令 | Payload 长度 | 说明 |
+| ---: | --- | ---: | --- |
+| `0x07` | `CHASSIS_GOTO_POSE` | 22 | 接收 world 目标点并启动异步状态机 |
+| `0x08` | `CHASSIS_CANCEL_GOAL` | 0 | 取消当前目标并平滑停车 |
+| `0x0B` | `CHASSIS_GET_MOTION_STATUS` | 0 | ACK 后返回 `MSG_DATA` 状态包 |
+
+当前实现不修改 `main.c` 测试逻辑，只提供 `AdvanceMotion_Poll()` 调度入口。坐标系、速度变换、GotoPose 运算逻辑和协议字段详见 `docs/坐标系与GotoPose使用说明.md` 与 `docs/上下位机通信协议.md`。
+
+## 9. 开发约束（重要）
 
 - **仅允许阅读和修改三个文件夹下的代码内容，`Core`、`jetson`、`MDK-ARM`**
 - 代码应写在 CubeMX 预留的 `USER CODE` 区域，避免再次生成代码时丢失。

@@ -14,8 +14,8 @@
  * - 这里不直接执行底盘、舵机、传感器业务命令。
  * - 如果串口助手只发 hello\r\n，会看到原始回显日志，但不会触发正式协议命令。
  */
-#define comm_pc_DMA_BUFFER_SIZE    ((uint16_t)256U)
-#define comm_pc_PRINT_BUFFER_SIZE  ((uint16_t)256U)
+#define comm_pc_DMA_BUFFER_SIZE ((uint16_t)256U)
+#define comm_pc_PRINT_BUFFER_SIZE ((uint16_t)256U)
 
 typedef struct
 {
@@ -33,29 +33,17 @@ typedef struct
 } HostRx_Channel_t;
 
 static HostRx_Channel_t g_comm_pc_channels[comm_pc_SOURCE_COUNT] = {
-  [comm_pc_SOURCE_PC] = {
-    .name = "PC",
-    .uart = NULL,
-    .dma_last_pos = 0U,
-    .print_length = 0U,
-    .print_ready = 0U,
-    .error_ready = 0U,
-    .overflow_count = 0U,
-    .uart_error_code = 0U,
-    .last_status = comm_pc_STATUS_NOT_READY
-  },
-  [comm_pc_SOURCE_JETSON] = {
-    .name = "JETSON",
-    .uart = NULL,
-    .dma_last_pos = 0U,
-    .print_length = 0U,
-    .print_ready = 0U,
-    .error_ready = 0U,
-    .overflow_count = 0U,
-    .uart_error_code = 0U,
-    .last_status = comm_pc_STATUS_NOT_READY
-  }
-};
+    [comm_pc_SOURCE_PC] = {
+        .name = "PC",
+        .uart = NULL,
+        .dma_last_pos = 0U,
+        .print_length = 0U,
+        .print_ready = 0U,
+        .error_ready = 0U,
+        .overflow_count = 0U,
+        .uart_error_code = 0U,
+        .last_status = comm_pc_STATUS_NOT_READY},
+    [comm_pc_SOURCE_JETSON] = {.name = "JETSON", .uart = NULL, .dma_last_pos = 0U, .print_length = 0U, .print_ready = 0U, .error_ready = 0U, .overflow_count = 0U, .uart_error_code = 0U, .last_status = comm_pc_STATUS_NOT_READY}};
 
 static HostRx_Status_t HostRx_StartDmaReceive(HostRx_Source_t source)
 {
