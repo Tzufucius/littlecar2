@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from struct import unpack_from
-from typing import Iterable, List
+from typing import List
 
 from .commands import HEADER, MAX_PAYLOAD_LEN, PROTOCOL_VERSION, MsgType
 from .exceptions import ProtocolError
-from .types import AckResult, ImuData, OpsPose, StatusReport
+from .types import AckResult, ImuData, MotionStatus, OpsPose, StatusReport
 
 BASE_HEADER_LEN = 9
 CRC_LEN = 2
@@ -161,3 +161,28 @@ def parse_status_report(payload: bytes) -> StatusReport:
         raise ProtocolError("STATUS payload length must be at least 24")
     values = unpack_from("<IBBBBHHiii", payload)
     return StatusReport(*values)
+
+
+def parse_motion_status(payload: bytes) -> MotionStatus:
+    """Parse the fixed 56-byte ``CHASSIS_GET_MOTION_STATUS`` response."""
+    if len(payload) != 56:
+        raise ProtocolError("motion status payload length must be 56")
+    values = unpack_from("<BBBBiiiiiiiiiiIII", payload)
+    return MotionStatus(
+        state=values[0],
+        active=values[1] != 0,
+        goal_flags=values[2],
+        pose_x_mm=values[4],
+        pose_y_mm=values[5],
+        pose_yaw_cdeg=values[6],
+        error_x_mm=values[7],
+        error_y_mm=values[8],
+        position_error_mm=values[9],
+        yaw_error_cdeg=values[10],
+        goal_x_mm=values[11],
+        goal_y_mm=values[12],
+        goal_yaw_cdeg=values[13],
+        elapsed_ms=values[14],
+        timeout_ms=values[15],
+        updated_tick=values[16],
+    )

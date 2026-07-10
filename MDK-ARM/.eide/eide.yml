@@ -31,6 +31,7 @@ virtualFolder:
                 - path: ../Core/Src/comm_jetson.c
                 - path: ../Core/Src/comm_pc.c
                 - path: ../Core/Src/comm_protocol.c
+                - path: ../Core/Src/advance_arm.c
                 - path: ../Core/Src/main.c
                 - path: ../Core/Src/stm32f4xx_it.c
                 - path: ../Core/Src/stm32f4xx_hal_msp.c

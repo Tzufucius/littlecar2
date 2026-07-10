@@ -2,6 +2,7 @@
 #include "advance_chassis.h"
 #include "advance_motion.h"
 #include "advance_world.h"
+#include "advance_arm.h"
 #include <stdbool.h>
 #include <string.h>
 
@@ -49,7 +50,9 @@ typedef enum
   /* 急停、安全停止、安全状态清除。 */
   CMDSET_SAFETY = 0x02,
   /* 底盘使能、停止、四轮 RPM、麦克纳姆合成速度。 */
-  CMDSET_CHASSIS = 0x03
+  CMDSET_CHASSIS = 0x03,
+  /* 机械臂与夹爪等上层执行器动作。 */
+  CMDSET_SERVO = 0x04
 } HostProtocol_CmdSet_t;
 
 typedef enum
@@ -836,6 +839,36 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
   }
 }
 
+/* SERVO 命令调用 advance_arm，避免通信层直接操作总线舵机协议。 */
+static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Frame_t *frame)
+{
+  BusServo_Status_t status;
+
+  if (HostProtocol_IsControlAllowed() == 0U)
+  {
+    return ACK_DENIED;
+  }
+
+  switch (frame->cmd_id)
+  {
+  case 0x10U:
+    /* ARM_GRAB：Payload[0] = 0 松开，1 夹取。 */
+    if (frame->payload_len != 1U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    if (frame->payload[0] > 1U)
+    {
+      return ACK_BAD_PARAM;
+    }
+    status = AdvanceArm_Grab(frame->payload[0]);
+    return (status == drive_bus_servo_STATUS_OK) ? ACK_OK : ACK_FAULT;
+
+  default:
+    return ACK_UNKNOWN_CMD;
+  }
+}
+
 /* 按 MsgType + CmdSet 分发命令，所有未知组合统一返回 ACK_UNKNOWN_CMD。 */
 static HostProtocol_AckResult_t HostProtocol_HandleCommand(const HostProtocol_Frame_t *frame)
 {
@@ -854,6 +887,9 @@ static HostProtocol_AckResult_t HostProtocol_HandleCommand(const HostProtocol_Fr
 
   case CMDSET_CHASSIS:
     return HostProtocol_HandleChassis(frame);
+
+  case CMDSET_SERVO:
+    return HostProtocol_HandleServo(frame);
 
   default:
     return ACK_UNKNOWN_CMD;
