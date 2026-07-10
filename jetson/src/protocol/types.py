@@ -49,3 +49,37 @@ class StatusReport:
     pos_x_mm: int
     pos_y_mm: int
     yaw_cdeg: int
+
+
+@dataclass(frozen=True)
+class WorldGoal:
+    """World-coordinate target consumed by ``CHASSIS_GOTO_POSE``."""
+
+    x_mm: int
+    y_mm: int
+    yaw_cdeg: int = 0
+    vmax_mm_s: int = 0
+    wmax_cdeg_s: int = 0
+    timeout_ms: int = 0
+    use_yaw: bool = False
+    acc: int = 10
+
+
+@dataclass(frozen=True)
+class MotionStatus:
+    state: int
+    active: bool
+    goal_flags: int
+    pose_x_mm: int
+    pose_y_mm: int
+    pose_yaw_cdeg: int
+    error_x_mm: int
+    error_y_mm: int
+    position_error_mm: int
+    yaw_error_cdeg: int
+    goal_x_mm: int
+    goal_y_mm: int
+    goal_yaw_cdeg: int
+    elapsed_ms: int
+    timeout_ms: int
+    updated_tick: int

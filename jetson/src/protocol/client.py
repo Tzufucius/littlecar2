@@ -6,9 +6,10 @@ import struct
 import time
 
 from .commands import ChassisCmd, CmdSet, SafetyCmd, SensorCmd, SystemCmd
-from .frame import parse_imu_data, parse_ops_pose, parse_status_report
+from .frame import parse_imu_data, parse_motion_status, parse_ops_pose, parse_status_report
+from .heartbeat import HeartbeatRunner
 from .transport import SerialTransport
-from .types import ImuData, OpsPose, StatusReport
+from .types import ImuData, MotionStatus, OpsPose, StatusReport, WorldGoal
 
 
 class Car:
@@ -31,6 +32,7 @@ class Car:
         self.chassis = ChassisClient(self.transport)
         self.wit = WitClient(self.transport)
         self.ops = OpsClient(self.transport)
+        self.heartbeat = HeartbeatRunner(self.system)
 
         self.System = self.system
         self.Safety = self.safety
@@ -39,6 +41,7 @@ class Car:
         self.Ops = self.ops
 
     def close(self) -> None:
+        self.heartbeat.stop()
         self.transport.close()
 
     def __enter__(self) -> "Car":
@@ -102,6 +105,48 @@ class ChassisClient:
     def move_mecanum(self, forward: int, strafe: int, rotate: int, acc: int = 10) -> None:
         payload = struct.pack("<hhhB", forward, strafe, rotate, acc)
         self._transport.send_command(CmdSet.CHASSIS, ChassisCmd.MOVE_MECANUM, payload)
+
+    def set_body_velocity(self, vx_mm_s: int, vy_mm_s: int, wz_cdeg_s: int, acc: int = 10) -> None:
+        """Set body velocity: +X right, +Y forward, positive yaw counter-clockwise."""
+        payload = struct.pack("<hhhB", vx_mm_s, vy_mm_s, wz_cdeg_s, acc)
+        self._transport.send_command(CmdSet.CHASSIS, ChassisCmd.SET_BODY_VELOCITY, payload)
+
+    def set_world_velocity(self, vx_mm_s: int, vy_mm_s: int, wz_cdeg_s: int, acc: int = 10) -> None:
+        """Set velocity in the STM32-maintained world coordinate system."""
+        payload = struct.pack("<hhhB", vx_mm_s, vy_mm_s, wz_cdeg_s, acc)
+        self._transport.send_command(CmdSet.CHASSIS, ChassisCmd.SET_WORLD_VELOCITY, payload)
+
+    def goto_pose(self, goal: WorldGoal) -> None:
+        """Submit an asynchronous world target; use ``get_motion_status`` to track it."""
+        flags = 0x01 if goal.use_yaw else 0x00
+        payload = struct.pack(
+            "<iiihhIBB",
+            goal.x_mm,
+            goal.y_mm,
+            goal.yaw_cdeg,
+            goal.vmax_mm_s,
+            goal.wmax_cdeg_s,
+            goal.timeout_ms,
+            flags,
+            goal.acc,
+        )
+        self._transport.send_command(CmdSet.CHASSIS, ChassisCmd.GOTO_POSE, payload)
+
+    def cancel_goal(self) -> None:
+        self._transport.send_command(CmdSet.CHASSIS, ChassisCmd.CANCEL_GOAL)
+
+    def reset_world_origin(self) -> None:
+        self._transport.send_command(CmdSet.CHASSIS, ChassisCmd.RESET_WORLD_ORIGIN)
+
+    def get_motion_status(self) -> MotionStatus:
+        frame = self._transport.send_command(
+            CmdSet.CHASSIS,
+            ChassisCmd.GET_MOTION_STATUS,
+            expect_data=True,
+        )
+        if frame is None:
+            raise RuntimeError("expected motion-status DATA frame")
+        return parse_motion_status(frame.payload)
 
 
 class WitClient:

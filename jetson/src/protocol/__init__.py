@@ -2,15 +2,19 @@
 
 from .client import Car
 from .exceptions import CommandRejectedError, ProtocolError, ProtocolTimeoutError
-from .types import AckResult, ImuData, OpsPose, StatusReport
+from .heartbeat import HeartbeatRunner
+from .types import AckResult, ImuData, MotionStatus, OpsPose, StatusReport, WorldGoal
 
 __all__ = [
     "AckResult",
     "Car",
     "CommandRejectedError",
     "ImuData",
+    "HeartbeatRunner",
+    "MotionStatus",
     "OpsPose",
     "ProtocolError",
     "ProtocolTimeoutError",
     "StatusReport",
+    "WorldGoal",
 ]
