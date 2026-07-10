@@ -49,6 +49,8 @@ virtualFolder:
                 - path: ../Core/Inc/advance_world.h
                 - path: ../Core/Inc/advance_motion.h
                 - path: ../Core/Src/advance_motion.c
+                - path: ../Core/Src/advance_arm.c
+                - path: ../Core/Inc/advance_arm.h
               folders: []
     - name: Drivers
       files: []

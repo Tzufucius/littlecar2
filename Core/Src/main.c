@@ -134,7 +134,7 @@ void situation_led()
   }
 }
 
-void test()
+void test() // 测试的东西全写在里面
 {
   // 测试 EMM V5 大头电机
   testEmmV5Datou(CHASSIS_MOTOR_LF_ID);
@@ -182,12 +182,15 @@ int main(void)
   MX_USART3_UART_Init();
   MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
-  BusServo_Init(&huart4);
+
+  // 传感器初始化
   OPS_Init(&huart5);
   WIT_Init();
-  CarPose_Init();
-  AdvanceWorld_Init();
 
+  // 外设初始化
+  BusServo_Init(&huart4);
+
+  // 通信初始化
   if (HostRx_InitPc(&huart1) != comm_pc_STATUS_OK)
   {
     printf("HostRx PC init failed\r\n");
@@ -212,8 +215,12 @@ int main(void)
     printf("AdvanceWorld origin failed, keep polling OPS\r\n");
   }
 
-  test();
+  // 高级封装初始化
+  CarPose_Init();
+  AdvanceWorld_Init();
 
+  // 测试函数
+  // test();
 
   /* USER CODE END 2 */
 
