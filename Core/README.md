@@ -22,7 +22,7 @@
 - `sensor_ops`：OPS 定位系统解析模块，使用 `UART5`。
 - `comm_pc`：PC / Jetson 原始接收调试桥接层，接入协议解析器。
 - `comm_jetson`：Jetson 原始接收调试兼容入口。
-- `comm_protocol`：上位机二进制协议解析、命令入队、ACK 回发。
+- `comm_protocol`：上位机二进制协议解析、命令入队、UART 中断发送队列与 ACK 回发。
 - `advance_chassis`：基于 `drive_emm` 的麦克纳姆底盘高级运动接口。
 - `advance_world`：维护 world 坐标系、全局位姿和 world/base 速度变换。
 - `advance_motion`：世界速度与 `GotoPose` 异步状态机；由 `main.c` 周期调用并受协议层控制权仲裁保护。
@@ -32,4 +32,5 @@
 - `drive_emm` 负责 USART3 DMA 发送队列、DMA/IDLE 回包解析和四个底盘电机的反馈新鲜度监督。
 - `advance_world` 负责 OPS 安装补偿、位置与航向的独立时间戳，以及 WIT 航向失效时的安全失效处理。
 - `comm_protocol` 负责让手动速度与 `GotoPose` 控制源互斥，并在急停、心跳超时和普通停止时取消活动目标。
+- `main.c` 使用 TIM6 置位任务标志，主循环以 `__WFI()` 等待事件后延后执行任务；不在定时器中断中直接运行底盘业务。
 - 详细配置、参数含义与上板验收流程见 `MDK-ARM/docs/下位机闭环与安全修复说明.md`。
