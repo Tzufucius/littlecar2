@@ -232,6 +232,17 @@ static uint8_t HostProtocol_AbsRpmTooLarge(int16_t rpm)
   return (value > (int32_t)CHASSIS_MAX_RPM) ? 1U : 0U;
 }
 
+static uint8_t HostProtocol_AbsI16Exceeds(int16_t value, int32_t limit)
+{
+  int32_t signed_value = value;
+
+  if (signed_value < 0)
+  {
+    signed_value = -signed_value;
+  }
+  return (signed_value > limit) ? 1U : 0U;
+}
+
 /*
  * 普通底盘命令的安全闸门。
  *
@@ -668,6 +679,12 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     vx_mm_s = HostProtocol_ReadI16(&frame->payload[0]);
     vy_mm_s = HostProtocol_ReadI16(&frame->payload[2]);
     wz_cdeg_s = HostProtocol_ReadI16(&frame->payload[4]);
+    if ((HostProtocol_AbsI16Exceeds(vx_mm_s, (int32_t)CHASSIS_MAX_BODY_SPEED_MM_S) != 0U) ||
+        (HostProtocol_AbsI16Exceeds(vy_mm_s, (int32_t)CHASSIS_MAX_BODY_SPEED_MM_S) != 0U) ||
+        (HostProtocol_AbsI16Exceeds(wz_cdeg_s, (int32_t)(CHASSIS_MAX_BODY_WZ_DEG_S * 100.0f)) != 0U))
+    {
+      return ACK_BAD_PARAM;
+    }
     HostProtocol_SelectMotionMode(HOST_CONTROL_BODY_VELOCITY);
     Chassis_SetBodyVelocityEx((float)vx_mm_s, (float)vy_mm_s, ((float)wz_cdeg_s) / 100.0f, frame->payload[6]);
     return ACK_OK;
@@ -684,6 +701,12 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     vx_mm_s = HostProtocol_ReadI16(&frame->payload[0]);
     vy_mm_s = HostProtocol_ReadI16(&frame->payload[2]);
     wz_cdeg_s = HostProtocol_ReadI16(&frame->payload[4]);
+    if ((HostProtocol_AbsI16Exceeds(vx_mm_s, (int32_t)CHASSIS_MAX_BODY_SPEED_MM_S) != 0U) ||
+        (HostProtocol_AbsI16Exceeds(vy_mm_s, (int32_t)CHASSIS_MAX_BODY_SPEED_MM_S) != 0U) ||
+        (HostProtocol_AbsI16Exceeds(wz_cdeg_s, (int32_t)(CHASSIS_MAX_BODY_WZ_DEG_S * 100.0f)) != 0U))
+    {
+      return ACK_BAD_PARAM;
+    }
     HostProtocol_SelectMotionMode(HOST_CONTROL_WORLD_VELOCITY);
     motion_status = AdvanceMotion_SetWorldVelocityEx(
         (float)vx_mm_s,
