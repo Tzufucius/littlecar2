@@ -30,6 +30,7 @@
 #include "advance_motion.h"
 #include "advance_world.h"
 #include "comm_pc.h"
+#include "comm_protocol.h"
 #include "car_pose.h"
 
 /* USER CODE END Includes */
@@ -725,6 +726,11 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
   {
     drive_emm_OnTxComplete(huart);
   }
+
+  if ((huart->Instance == USART1) || (huart->Instance == USART6))
+  {
+    HostProtocol_OnUartTxComplete(huart);
+  }
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
@@ -732,6 +738,11 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
   if (huart->Instance == USART3)
   {
     drive_emm_OnUartError(huart);
+  }
+
+  if ((huart->Instance == USART1) || (huart->Instance == USART6))
+  {
+    HostProtocol_OnUartError(huart);
   }
 
   if (huart->Instance == UART4)
