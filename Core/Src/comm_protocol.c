@@ -98,6 +98,40 @@ static uint8_t g_heartbeat_online = 0U;
 static uint8_t g_safety_latched = 0U;
 static uint8_t g_control_mode = 0U;
 
+typedef enum
+{
+  HOST_CONTROL_IDLE = 0U,
+  HOST_CONTROL_MOTOR_RPM,
+  HOST_CONTROL_MECANUM,
+  HOST_CONTROL_BODY_VELOCITY,
+  HOST_CONTROL_WORLD_VELOCITY,
+  HOST_CONTROL_GOTO_POSE,
+  HOST_CONTROL_SAFETY_LOCKED
+} HostProtocol_ControlMode_t;
+
+static void HostProtocol_StopMotion(uint8_t immediate)
+{
+  AdvanceMotion_CancelIfActive();
+  if (immediate != 0U)
+  {
+    Chassis_Stop();
+  }
+  else
+  {
+    Chassis_SmoothStop(CHASSIS_DEFAULT_ACC);
+  }
+  g_control_mode = HOST_CONTROL_IDLE;
+}
+
+static void HostProtocol_SelectMotionMode(HostProtocol_ControlMode_t mode)
+{
+  if (mode != HOST_CONTROL_GOTO_POSE)
+  {
+    AdvanceMotion_CancelIfActive();
+  }
+  g_control_mode = (uint8_t)mode;
+}
+
 /* 协议中 uint16_t 使用小端：低字节在前，高字节在后。 */
 static uint16_t HostProtocol_ReadU16(const uint8_t *data)
 {
@@ -227,7 +261,7 @@ static void HostProtocol_CheckHeartbeatTimeout(void)
       ((HAL_GetTick() - g_last_heartbeat_tick) > comm_protocol_HEARTBEAT_MS))
   {
     g_heartbeat_online = 0U;
-    Chassis_Stop();
+    HostProtocol_StopMotion(1U);
   }
 }
 
@@ -439,6 +473,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleSystem(const HostProtocol_Fra
     {
       return ACK_BAD_LENGTH;
     }
+    /* 系统模式不再与底盘运动控制权混用，仅保留协议兼容字段。 */
     g_control_mode = frame->payload[0];
     return ACK_OK;
 
@@ -460,7 +495,8 @@ static HostProtocol_AckResult_t HostProtocol_HandleSafety(const HostProtocol_Fra
     }
     (void)frame->payload[0];
     g_safety_latched = 1U;
-    Chassis_Stop();
+    HostProtocol_StopMotion(1U);
+    g_control_mode = HOST_CONTROL_SAFETY_LOCKED;
     return ACK_OK;
 
   case 0x02U:
@@ -471,11 +507,11 @@ static HostProtocol_AckResult_t HostProtocol_HandleSafety(const HostProtocol_Fra
     }
     if (frame->payload[0] == 0U)
     {
-      Chassis_SmoothStop(CHASSIS_DEFAULT_ACC);
+      HostProtocol_StopMotion(0U);
     }
     else if (frame->payload[0] == 1U)
     {
-      Chassis_Stop();
+      HostProtocol_StopMotion(1U);
     }
     else
     {
@@ -544,6 +580,10 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     {
       return ACK_BAD_PARAM;
     }
+    if (frame->payload[0] == 0U)
+    {
+      HostProtocol_StopMotion(1U);
+    }
     Chassis_Enable(frame->payload[0] != 0U);
     return ACK_OK;
 
@@ -555,11 +595,11 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     }
     if (frame->payload[0] == 0U)
     {
-      Chassis_SmoothStop(CHASSIS_DEFAULT_ACC);
+      HostProtocol_StopMotion(0U);
     }
     else if (frame->payload[0] == 1U)
     {
-      Chassis_Stop();
+      HostProtocol_StopMotion(1U);
     }
     else
     {
@@ -588,6 +628,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     {
       return ACK_BAD_PARAM;
     }
+    HostProtocol_SelectMotionMode(HOST_CONTROL_MOTOR_RPM);
     Chassis_SetMotorRPMEx(lf_rpm, rf_rpm, lr_rpm, rr_rpm, frame->payload[8]);
     return ACK_OK;
 
@@ -611,6 +652,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     {
       return ACK_BAD_PARAM;
     }
+    HostProtocol_SelectMotionMode(HOST_CONTROL_MECANUM);
     Chassis_MoveMecanumEx(forward_rpm, strafe_rpm, rotate_rpm, frame->payload[6]);
     return ACK_OK;
 
@@ -626,6 +668,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     vx_mm_s = HostProtocol_ReadI16(&frame->payload[0]);
     vy_mm_s = HostProtocol_ReadI16(&frame->payload[2]);
     wz_cdeg_s = HostProtocol_ReadI16(&frame->payload[4]);
+    HostProtocol_SelectMotionMode(HOST_CONTROL_BODY_VELOCITY);
     Chassis_SetBodyVelocityEx((float)vx_mm_s, (float)vy_mm_s, ((float)wz_cdeg_s) / 100.0f, frame->payload[6]);
     return ACK_OK;
 
@@ -641,6 +684,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     vx_mm_s = HostProtocol_ReadI16(&frame->payload[0]);
     vy_mm_s = HostProtocol_ReadI16(&frame->payload[2]);
     wz_cdeg_s = HostProtocol_ReadI16(&frame->payload[4]);
+    HostProtocol_SelectMotionMode(HOST_CONTROL_WORLD_VELOCITY);
     motion_status = AdvanceMotion_SetWorldVelocityEx(
         (float)vx_mm_s,
         (float)vy_mm_s,
@@ -673,6 +717,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     goal.wmax_deg_s = ((float)wmax_cdeg_s) / 100.0f;
     goal.timeout_ms = timeout_ms;
     goal.goal_flags = goal_flags;
+    HostProtocol_SelectMotionMode(HOST_CONTROL_GOTO_POSE);
     motion_status = AdvanceMotion_GotoPoseEx(&goal, acc);
     if (motion_status == ADVANCE_MOTION_STATUS_OK)
     {
@@ -686,7 +731,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     {
       return ACK_BAD_LENGTH;
     }
-    AdvanceMotion_Cancel();
+    HostProtocol_StopMotion(0U);
     return ACK_OK;
 
   case 0x09U:

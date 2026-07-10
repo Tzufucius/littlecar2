@@ -19,6 +19,7 @@ typedef struct
   uint32_t last_control_tick;
   uint32_t arrive_hold_start_tick;
   uint8_t active;
+  uint8_t arrival_stop_sent;
   uint8_t acc;
 } AdvanceMotion_Context_t;
 
@@ -59,6 +60,35 @@ static float AdvanceMotion_GetGoalVmax(const WorldGoalPose2D_t *goal)
 static float AdvanceMotion_GetGoalWmax(const WorldGoalPose2D_t *goal)
 {
   return (goal->wmax_deg_s > 0.0f) ? goal->wmax_deg_s : ADVANCE_MOTION_DEFAULT_WMAX_DEG_S;
+}
+
+static uint8_t AdvanceMotion_IsGoalValid(const WorldGoalPose2D_t *goal)
+{
+  if ((goal == 0) ||
+      (isfinite(goal->x_mm) == 0) ||
+      (isfinite(goal->y_mm) == 0) ||
+      (isfinite(goal->yaw_deg) == 0) ||
+      (isfinite(goal->vmax_mm_s) == 0) ||
+      (isfinite(goal->wmax_deg_s) == 0))
+  {
+    return 0U;
+  }
+
+  if ((goal->x_mm < ADVANCE_MOTION_WORLD_X_MIN_MM) ||
+      (goal->x_mm > ADVANCE_MOTION_WORLD_X_MAX_MM) ||
+      (goal->y_mm < ADVANCE_MOTION_WORLD_Y_MIN_MM) ||
+      (goal->y_mm > ADVANCE_MOTION_WORLD_Y_MAX_MM) ||
+      (goal->vmax_mm_s < 0.0f) ||
+      (goal->vmax_mm_s > ADVANCE_MOTION_MAX_VMAX_MM_S) ||
+      (goal->wmax_deg_s < 0.0f) ||
+      (goal->wmax_deg_s > ADVANCE_MOTION_MAX_WMAX_DEG_S) ||
+      (goal->timeout_ms > ADVANCE_MOTION_MAX_TIMEOUT_MS) ||
+      ((goal->goal_flags & (uint8_t)(~ADVANCE_MOTION_GOAL_USE_YAW)) != 0U))
+  {
+    return 0U;
+  }
+
+  return 1U;
 }
 
 static AdvanceMotion_Status_t AdvanceMotion_GetFreshPose(WorldPose2D_t *pose)
@@ -163,7 +193,7 @@ AdvanceMotion_Status_t AdvanceMotion_GotoPose(const WorldGoalPose2D_t *goal)
 
 AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, uint8_t acc)
 {
-  if (goal == 0)
+  if (AdvanceMotion_IsGoalValid(goal) == 0U)
   {
     return ADVANCE_MOTION_STATUS_INVALID_PARAM;
   }
@@ -173,6 +203,7 @@ AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, u
   g_motion.updated_tick = g_motion.started_tick;
   g_motion.last_control_tick = 0U;
   g_motion.arrive_hold_start_tick = 0U;
+  g_motion.arrival_stop_sent = 0U;
   g_motion.error_x_mm = 0.0f;
   g_motion.error_y_mm = 0.0f;
   g_motion.position_error_mm = 0.0f;
@@ -239,6 +270,12 @@ void AdvanceMotion_Poll(void)
     {
       g_motion.arrive_hold_start_tick = now_tick;
     }
+    if (g_motion.arrival_stop_sent == 0U)
+    {
+      /* 保持判定期间已不再输出上一周期的非零速度。 */
+      Chassis_SmoothStop(g_motion.acc);
+      g_motion.arrival_stop_sent = 1U;
+    }
     if ((now_tick - g_motion.arrive_hold_start_tick) >= ADVANCE_MOTION_ARRIVE_HOLD_MS)
     {
       AdvanceMotion_SetTerminalState(ADVANCE_MOTION_STATE_ARRIVED, g_motion.acc);
@@ -246,6 +283,7 @@ void AdvanceMotion_Poll(void)
     return;
   }
   g_motion.arrive_hold_start_tick = 0U;
+  g_motion.arrival_stop_sent = 0U;
 
   vx_world_mm_s = ADVANCE_MOTION_KP_POS * g_motion.error_x_mm;
   vy_world_mm_s = ADVANCE_MOTION_KP_POS * g_motion.error_y_mm;
@@ -268,6 +306,14 @@ void AdvanceMotion_Poll(void)
 void AdvanceMotion_Cancel(void)
 {
   AdvanceMotion_SetTerminalState(ADVANCE_MOTION_STATE_CANCELED, CHASSIS_DEFAULT_ACC);
+}
+
+void AdvanceMotion_CancelIfActive(void)
+{
+  if ((g_motion.active != 0U) || (g_motion.state == ADVANCE_MOTION_STATE_RUNNING))
+  {
+    AdvanceMotion_Cancel();
+  }
 }
 
 AdvanceMotion_Status_t AdvanceMotion_GetStatus(AdvanceMotion_RuntimeStatus_t *status)

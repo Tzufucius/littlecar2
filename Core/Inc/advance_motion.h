@@ -19,6 +19,18 @@ extern "C"
 #define ADVANCE_MOTION_DEFAULT_VMAX_MM_S (200.0f)
 #define ADVANCE_MOTION_DEFAULT_WMAX_DEG_S (90.0f)
 
+/*
+ * GotoPose 输入边界。它们是软件安全限值，不替代现场的机械限位。
+ * 修改前应确认场地尺寸、OPS 坐标单位和底盘的可制动距离。
+ */
+#define ADVANCE_MOTION_WORLD_X_MIN_MM (-5000.0f)
+#define ADVANCE_MOTION_WORLD_X_MAX_MM (5000.0f)
+#define ADVANCE_MOTION_WORLD_Y_MIN_MM (-5000.0f)
+#define ADVANCE_MOTION_WORLD_Y_MAX_MM (5000.0f)
+#define ADVANCE_MOTION_MAX_VMAX_MM_S (500.0f)
+#define ADVANCE_MOTION_MAX_WMAX_DEG_S (180.0f)
+#define ADVANCE_MOTION_MAX_TIMEOUT_MS ((uint32_t)60000U)
+
 #define ADVANCE_MOTION_GOAL_USE_YAW ((uint8_t)0x01U)
 
   typedef enum
@@ -61,6 +73,8 @@ extern "C"
   AdvanceMotion_Status_t AdvanceMotion_GotoPose(const WorldGoalPose2D_t *goal);
   AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, uint8_t acc);
   void AdvanceMotion_Poll(void);
+  /** @brief 仅在存在活动目标时取消并平滑停车，避免空闲状态产生多余停止帧。 */
+  void AdvanceMotion_CancelIfActive(void);
   void AdvanceMotion_Cancel(void);
   AdvanceMotion_Status_t AdvanceMotion_GetStatus(AdvanceMotion_RuntimeStatus_t *status);
 

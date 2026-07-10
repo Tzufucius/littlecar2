@@ -27,6 +27,7 @@
 #include "sensor_wit.h"
 #include "drive_emm.h"
 #include "advance_chassis.h"
+#include "advance_motion.h"
 #include "advance_world.h"
 #include "comm_pc.h"
 #include "car_pose.h"
@@ -40,7 +41,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define WORLD_ORIGIN_STATIC_WAIT_MS ((uint32_t)15000U)
+/* 原点未建立时的非阻塞重试间隔；OPS 有效前不会建立原点。 */
+#define WORLD_ORIGIN_RETRY_MS ((uint32_t)1000U)
+/* 发布固件保持 0，避免 printf 的逐字节阻塞影响控制周期。 */
+#define DEBUG_UART_ENABLE (0U)
 
 /* USER CODE END PD */
 
@@ -87,8 +91,12 @@ static void MX_USART6_UART_Init(void);
 int fputc(int ch, FILE *f)
 {
   (void)f;
+#if (DEBUG_UART_ENABLE != 0U)
   uint8_t byte = (uint8_t)ch;
-  HAL_UART_Transmit(&huart1, &byte, 1, HAL_MAX_DELAY);
+  (void)HAL_UART_Transmit(&huart1, &byte, 1, 20U);
+#else
+  (void)ch;
+#endif
   return ch;
 }
 
@@ -187,6 +195,11 @@ int main(void)
   OPS_Init(&huart5);
   WIT_Init();
 
+  /* 上层模块先绑定传感器数据视图，再初始化自身状态。 */
+  CarPose_Init();
+  AdvanceWorld_Init();
+  AdvanceMotion_Init();
+
   // 外设初始化
   BusServo_Init(&huart4);
 
@@ -201,23 +214,8 @@ int main(void)
     printf("HostRx Jetson init failed\r\n");
   }
 
-  printf("USART1 printf ready\r\n");
-  HAL_Delay(100);
-
-  printf("OPS static init wait %lu ms\r\n", (unsigned long)WORLD_ORIGIN_STATIC_WAIT_MS);
-  HAL_Delay(WORLD_ORIGIN_STATIC_WAIT_MS);
-  if (AdvanceWorld_ResetOrigin() == ADVANCE_WORLD_STATUS_OK)
-  {
-    printf("AdvanceWorld origin ready\r\n");
-  }
-  else
-  {
-    printf("AdvanceWorld origin failed, keep polling OPS\r\n");
-  }
-
-  // 高级封装初始化
-  CarPose_Init();
-  AdvanceWorld_Init();
+  /* 不阻塞等待传感器；主循环在 OPS 有效后建立原点。 */
+  g_world_origin_retry_tick = HAL_GetTick() - WORLD_ORIGIN_RETRY_MS;
 
   // 测试函数
   // test();
@@ -236,13 +234,13 @@ int main(void)
     WIT_Poll();
     AdvanceWorld_Poll();
     if ((AdvanceWorld_GetPose()->origin_ready == 0U) &&
-        ((HAL_GetTick() - g_world_origin_retry_tick) >= 1000U))
+        ((HAL_GetTick() - g_world_origin_retry_tick) >= WORLD_ORIGIN_RETRY_MS))
     {
       g_world_origin_retry_tick = HAL_GetTick();
       (void)AdvanceWorld_ResetOrigin();
     }
-    AdvanceWorld_PrintDebug();
     HostRx_Poll();
+    AdvanceMotion_Poll();
     situation_led();
   }
   /* USER CODE END 3 */
