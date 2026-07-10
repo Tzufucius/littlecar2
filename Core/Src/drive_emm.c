@@ -9,6 +9,205 @@
 ***	qq交流群：262438510
 **********************************************************/
 
+#include <string.h>
+
+#define DRIVE_EMM_TX_FRAME_MAX_LENGTH (MMCL_LEN + 5U)
+#define DRIVE_EMM_RX_DMA_BUFFER_SIZE ((uint16_t)128U)
+#define DRIVE_EMM_FEEDBACK_MOTOR_COUNT ((uint8_t)4U)
+
+typedef struct
+{
+  uint8_t id;
+  DriveEmm_MotorFeedback_t feedback;
+} DriveEmm_MonitoredMotor_t;
+
+static uint8_t g_drive_emm_tx_queue[DRIVE_EMM_TX_QUEUE_DEPTH][DRIVE_EMM_TX_FRAME_MAX_LENGTH] = {{0}};
+static uint16_t g_drive_emm_tx_length[DRIVE_EMM_TX_QUEUE_DEPTH] = {0};
+static volatile uint8_t g_drive_emm_tx_head = 0U;
+static volatile uint8_t g_drive_emm_tx_tail = 0U;
+static volatile uint8_t g_drive_emm_tx_count = 0U;
+static volatile uint8_t g_drive_emm_tx_active = 0U;
+static uint32_t g_drive_emm_tx_started_tick = 0U;
+static uint32_t g_drive_emm_tx_error_count = 0U;
+static uint8_t g_drive_emm_rx_dma_buffer[DRIVE_EMM_RX_DMA_BUFFER_SIZE] = {0};
+static uint16_t g_drive_emm_rx_last_pos = 0U;
+static uint8_t g_drive_emm_rx_frame[8] = {0};
+static uint8_t g_drive_emm_rx_frame_length = 0U;
+static DriveEmm_MonitoredMotor_t g_drive_emm_motors[DRIVE_EMM_FEEDBACK_MOTOR_COUNT] = {{0}};
+static uint8_t g_drive_emm_query_motor_index = 0U;
+static uint8_t g_drive_emm_query_kind = 0U;
+static uint32_t g_drive_emm_last_query_tick = 0U;
+static uint32_t g_drive_emm_monitor_started_tick = 0U;
+
+static uint8_t DriveEmm_GetExpectedReplyLength(uint8_t code)
+{
+  switch (code)
+  {
+  case 0x35U:
+    return 5U;
+  case 0x36U:
+  case 0x37U:
+    return 7U;
+  case 0x3AU:
+    return 4U;
+  default:
+    return 4U;
+  }
+}
+
+static int16_t DriveEmm_ReadSigned16(const uint8_t *data)
+{
+  int16_t value = (int16_t)(((uint16_t)data[1] << 8) | data[2]);
+  return (data[0] == 0U) ? value : (int16_t)-value;
+}
+
+static int32_t DriveEmm_ReadSigned32(const uint8_t *data)
+{
+  int32_t value = (int32_t)(((uint32_t)data[1] << 24) |
+                            ((uint32_t)data[2] << 16) |
+                            ((uint32_t)data[3] << 8) |
+                            data[4]);
+  return (data[0] == 0U) ? value : -value;
+}
+
+static DriveEmm_MonitoredMotor_t *DriveEmm_FindMotor(uint8_t id)
+{
+  uint8_t index;
+
+  for (index = 0U; index < DRIVE_EMM_FEEDBACK_MOTOR_COUNT; ++index)
+  {
+    if (g_drive_emm_motors[index].id == id)
+    {
+      return &g_drive_emm_motors[index];
+    }
+  }
+  return NULL;
+}
+
+static void DriveEmm_HandleReply(const uint8_t *frame, uint8_t length)
+{
+  DriveEmm_MonitoredMotor_t *motor;
+  uint8_t code;
+
+  if ((length < 4U) || (frame[length - 1U] != 0x6BU))
+  {
+    return;
+  }
+  motor = DriveEmm_FindMotor(frame[0]);
+  if (motor == NULL)
+  {
+    return;
+  }
+
+  code = frame[1];
+  if ((code == 0x35U) && (length == 5U))
+  {
+    motor->feedback.speed_rpm = DriveEmm_ReadSigned16(&frame[2]);
+  }
+  else if ((code == 0x36U) && (length == 7U))
+  {
+    motor->feedback.position = DriveEmm_ReadSigned32(&frame[2]);
+  }
+  else if ((code == 0x37U) && (length == 7U))
+  {
+    motor->feedback.position_error = DriveEmm_ReadSigned32(&frame[2]);
+  }
+  else if ((code == 0x3AU) && (length == 4U))
+  {
+    uint8_t flags = frame[2];
+    motor->feedback.enabled = ((flags & 0x01U) != 0U) ? 1U : 0U;
+    motor->feedback.stalled = ((flags & 0x0CU) != 0U) ? 1U : 0U;
+    motor->feedback.fault = ((flags & 0x80U) != 0U) ? 1U : 0U;
+  }
+  else
+  {
+    return;
+  }
+
+  motor->feedback.updated_tick = HAL_GetTick();
+  motor->feedback.valid = 1U;
+}
+
+static void DriveEmm_ParseByte(uint8_t byte)
+{
+  uint8_t expected_length;
+
+  if (g_drive_emm_rx_frame_length >= sizeof(g_drive_emm_rx_frame))
+  {
+    g_drive_emm_rx_frame_length = 0U;
+  }
+  g_drive_emm_rx_frame[g_drive_emm_rx_frame_length++] = byte;
+  if (g_drive_emm_rx_frame_length < 2U)
+  {
+    return;
+  }
+
+  expected_length = DriveEmm_GetExpectedReplyLength(g_drive_emm_rx_frame[1]);
+  if (g_drive_emm_rx_frame_length >= expected_length)
+  {
+    DriveEmm_HandleReply(g_drive_emm_rx_frame, expected_length);
+    g_drive_emm_rx_frame_length = 0U;
+  }
+}
+
+static HAL_StatusTypeDef DriveEmm_StartQueuedTransmit(void)
+{
+  HAL_StatusTypeDef status;
+
+  if ((g_drive_emm_tx_active != 0U) || (g_drive_emm_tx_count == 0U))
+  {
+    return HAL_OK;
+  }
+
+  g_drive_emm_tx_active = 1U;
+  status = (HAL_UART_Transmit_DMA)(drive_emm_UART,
+                                    g_drive_emm_tx_queue[g_drive_emm_tx_tail],
+                                    g_drive_emm_tx_length[g_drive_emm_tx_tail]);
+  if (status == HAL_OK)
+  {
+    g_drive_emm_tx_started_tick = HAL_GetTick();
+  }
+  else
+  {
+    g_drive_emm_tx_active = 0U;
+  }
+  return status;
+}
+
+static HAL_StatusTypeDef DriveEmm_QueueTransmit(UART_HandleTypeDef *huart, uint8_t *data, uint16_t length)
+{
+  uint8_t slot;
+
+  if ((huart != drive_emm_UART) || (data == NULL) || (length == 0U) ||
+      (length > DRIVE_EMM_TX_FRAME_MAX_LENGTH))
+  {
+    return HAL_ERROR;
+  }
+
+  __disable_irq();
+  if (g_drive_emm_tx_count >= DRIVE_EMM_TX_QUEUE_DEPTH)
+  {
+    __enable_irq();
+    ++g_drive_emm_tx_error_count;
+    return HAL_BUSY;
+  }
+  slot = g_drive_emm_tx_head;
+  memcpy(g_drive_emm_tx_queue[slot], data, length);
+  g_drive_emm_tx_length[slot] = length;
+  g_drive_emm_tx_head = (uint8_t)((slot + 1U) % DRIVE_EMM_TX_QUEUE_DEPTH);
+  ++g_drive_emm_tx_count;
+  __enable_irq();
+
+  if (DriveEmm_StartQueuedTransmit() != HAL_OK)
+  {
+    ++g_drive_emm_tx_error_count;
+  }
+  return HAL_OK;
+}
+
+/* 所有旧 API 统一经过队列，避免 UART 忙时清空尚未发送的底盘命令。 */
+#define HAL_UART_Transmit_DMA(huart, data, length) DriveEmm_QueueTransmit((huart), (data), (length))
+
 __IO uint16_t MMCL_count = 0, MMCL_cmd[MMCL_LEN] = {0};
 
 /**********************************************************
@@ -141,8 +340,11 @@ void drive_emm_Multi_Motor_Cmd(uint8_t addr)
     ++j; // 校验字节
 
     // 发送命令
-    HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, j);
-    MMCL_count = 0;
+    if (HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, j) == HAL_OK)
+    {
+      /* 仅在帧已复制进 DMA 队列后清空装载缓存，避免 UART 忙时丢失命令。 */
+      MMCL_count = 0;
+    }
   }
   else
   {
@@ -619,6 +821,186 @@ void drive_emm_Read_Sys_Params(uint8_t addr, SysParams_t s)
 /**********************************************************
 *** 读写驱动参数命令
 **********************************************************/
+
+HAL_StatusTypeDef drive_emm_Init(void)
+{
+  g_drive_emm_tx_head = 0U;
+  g_drive_emm_tx_tail = 0U;
+  g_drive_emm_tx_count = 0U;
+  g_drive_emm_tx_active = 0U;
+  g_drive_emm_tx_error_count = 0U;
+  g_drive_emm_rx_last_pos = 0U;
+  g_drive_emm_rx_frame_length = 0U;
+  g_drive_emm_monitor_started_tick = HAL_GetTick();
+
+  if (HAL_UARTEx_ReceiveToIdle_DMA(drive_emm_UART,
+                                   g_drive_emm_rx_dma_buffer,
+                                   DRIVE_EMM_RX_DMA_BUFFER_SIZE) != HAL_OK)
+  {
+    return HAL_ERROR;
+  }
+  if (drive_emm_UART->hdmarx != NULL)
+  {
+    __HAL_DMA_DISABLE_IT(drive_emm_UART->hdmarx, DMA_IT_HT);
+  }
+  return HAL_OK;
+}
+
+void drive_emm_ConfigureChassisFeedback(uint8_t lf_id, uint8_t rf_id, uint8_t lr_id, uint8_t rr_id)
+{
+  const uint8_t ids[DRIVE_EMM_FEEDBACK_MOTOR_COUNT] = {lf_id, rf_id, lr_id, rr_id};
+  uint8_t index;
+
+  for (index = 0U; index < DRIVE_EMM_FEEDBACK_MOTOR_COUNT; ++index)
+  {
+    g_drive_emm_motors[index].id = ids[index];
+    g_drive_emm_motors[index].feedback = (DriveEmm_MotorFeedback_t){0};
+#if (DRIVE_EMM_ENABLE_HEARTBEAT_PROTECTION != 0U)
+    /* 写入驱动器非易失配置；STM32 失联后由驱动器自行停止。 */
+    drive_emm_Modify_Heart_Protect(ids[index], true, DRIVE_EMM_HEARTBEAT_PROTECT_MS);
+#endif
+  }
+}
+
+void drive_emm_OnTxComplete(UART_HandleTypeDef *huart)
+{
+  if ((huart != drive_emm_UART) || (g_drive_emm_tx_active == 0U))
+  {
+    return;
+  }
+
+  g_drive_emm_tx_tail = (uint8_t)((g_drive_emm_tx_tail + 1U) % DRIVE_EMM_TX_QUEUE_DEPTH);
+  --g_drive_emm_tx_count;
+  g_drive_emm_tx_active = 0U;
+  (void)DriveEmm_StartQueuedTransmit();
+}
+
+void drive_emm_OnUartRxEvent(UART_HandleTypeDef *huart, uint16_t size)
+{
+  uint16_t current_pos = size;
+  uint16_t index;
+
+  if (huart != drive_emm_UART)
+  {
+    return;
+  }
+  if (current_pos > DRIVE_EMM_RX_DMA_BUFFER_SIZE)
+  {
+    current_pos = DRIVE_EMM_RX_DMA_BUFFER_SIZE;
+  }
+  if (current_pos == g_drive_emm_rx_last_pos)
+  {
+    return;
+  }
+
+  if (current_pos > g_drive_emm_rx_last_pos)
+  {
+    for (index = g_drive_emm_rx_last_pos; index < current_pos; ++index)
+    {
+      DriveEmm_ParseByte(g_drive_emm_rx_dma_buffer[index]);
+    }
+  }
+  else
+  {
+    for (index = g_drive_emm_rx_last_pos; index < DRIVE_EMM_RX_DMA_BUFFER_SIZE; ++index)
+    {
+      DriveEmm_ParseByte(g_drive_emm_rx_dma_buffer[index]);
+    }
+    for (index = 0U; index < current_pos; ++index)
+    {
+      DriveEmm_ParseByte(g_drive_emm_rx_dma_buffer[index]);
+    }
+  }
+  g_drive_emm_rx_last_pos = (current_pos == DRIVE_EMM_RX_DMA_BUFFER_SIZE) ? 0U : current_pos;
+}
+
+void drive_emm_OnUartError(UART_HandleTypeDef *huart)
+{
+  if (huart == drive_emm_UART)
+  {
+    g_drive_emm_rx_frame_length = 0U;
+    g_drive_emm_rx_last_pos = 0U;
+    (void)HAL_UARTEx_ReceiveToIdle_DMA(drive_emm_UART,
+                                       g_drive_emm_rx_dma_buffer,
+                                       DRIVE_EMM_RX_DMA_BUFFER_SIZE);
+  }
+}
+
+void drive_emm_Poll(void)
+{
+  static const SysParams_t query_types[] = {S_VEL, S_CPOS, S_PERR, S_FLAG};
+  uint32_t now_tick = HAL_GetTick();
+
+  if ((g_drive_emm_tx_active != 0U) &&
+      ((now_tick - g_drive_emm_tx_started_tick) > DRIVE_EMM_TX_TIMEOUT_MS))
+  {
+    (void)HAL_UART_AbortTransmit(drive_emm_UART);
+    g_drive_emm_tx_tail = (uint8_t)((g_drive_emm_tx_tail + 1U) % DRIVE_EMM_TX_QUEUE_DEPTH);
+    --g_drive_emm_tx_count;
+    g_drive_emm_tx_active = 0U;
+    ++g_drive_emm_tx_error_count;
+  }
+  (void)DriveEmm_StartQueuedTransmit();
+
+  if ((now_tick - g_drive_emm_last_query_tick) < DRIVE_EMM_FEEDBACK_PERIOD_MS)
+  {
+    return;
+  }
+  g_drive_emm_last_query_tick = now_tick;
+  if (g_drive_emm_motors[g_drive_emm_query_motor_index].id != 0U)
+  {
+    drive_emm_Read_Sys_Params(g_drive_emm_motors[g_drive_emm_query_motor_index].id,
+                              query_types[g_drive_emm_query_kind]);
+  }
+  g_drive_emm_query_kind = (uint8_t)((g_drive_emm_query_kind + 1U) % (sizeof(query_types) / sizeof(query_types[0])));
+  if (g_drive_emm_query_kind == 0U)
+  {
+    g_drive_emm_query_motor_index = (uint8_t)((g_drive_emm_query_motor_index + 1U) % DRIVE_EMM_FEEDBACK_MOTOR_COUNT);
+  }
+}
+
+uint8_t drive_emm_IsChassisFeedbackHealthy(void)
+{
+  uint8_t index;
+  uint32_t now_tick = HAL_GetTick();
+
+  if ((now_tick - g_drive_emm_monitor_started_tick) < DRIVE_EMM_FEEDBACK_STARTUP_GRACE_MS)
+  {
+    return 1U;
+  }
+  if (g_drive_emm_tx_error_count != 0U)
+  {
+    return 0U;
+  }
+  for (index = 0U; index < DRIVE_EMM_FEEDBACK_MOTOR_COUNT; ++index)
+  {
+    const DriveEmm_MotorFeedback_t *feedback = &g_drive_emm_motors[index].feedback;
+    if ((g_drive_emm_motors[index].id == 0U) || (feedback->valid == 0U) ||
+        ((now_tick - feedback->updated_tick) > DRIVE_EMM_FEEDBACK_TIMEOUT_MS) ||
+        (feedback->stalled != 0U) || (feedback->fault != 0U))
+    {
+      return 0U;
+    }
+  }
+  return 1U;
+}
+
+HAL_StatusTypeDef drive_emm_GetMotorFeedback(uint8_t id, DriveEmm_MotorFeedback_t *feedback)
+{
+  DriveEmm_MonitoredMotor_t *motor;
+
+  if (feedback == NULL)
+  {
+    return HAL_ERROR;
+  }
+  motor = DriveEmm_FindMotor(id);
+  if (motor == NULL)
+  {
+    return HAL_ERROR;
+  }
+  *feedback = motor->feedback;
+  return HAL_OK;
+}
 /**
  * @brief    修改电机ID地址
  * @param    addr     ：电机地址

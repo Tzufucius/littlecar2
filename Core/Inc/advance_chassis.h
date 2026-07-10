@@ -94,6 +94,8 @@ extern "C"
      * 内部发送四轮 0RPM 速度命令，acc 越小减速越柔和。
      */
     void Chassis_SmoothStop(uint8_t acc);
+    /* 仅表示最近一次底盘速度命令是否非零，用于反馈超时的停车保护。 */
+    uint8_t Chassis_IsMotionCommandActive(void);
 
     /*
      * 直接设置四个轮子的转速。

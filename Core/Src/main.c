@@ -199,6 +199,12 @@ int main(void)
   CarPose_Init();
   AdvanceWorld_Init();
   AdvanceMotion_Init();
+  (void)drive_emm_Init();
+  drive_emm_ConfigureChassisFeedback(
+      CHASSIS_MOTOR_LF_ID,
+      CHASSIS_MOTOR_RF_ID,
+      CHASSIS_MOTOR_LR_ID,
+      CHASSIS_MOTOR_RR_ID);
 
   // 外设初始化
   BusServo_Init(&huart4);
@@ -230,6 +236,12 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     // BusServo_Poll();
+    drive_emm_Poll();
+    if ((Chassis_IsMotionCommandActive() != 0U) && (drive_emm_IsChassisFeedbackHealthy() == 0U))
+    {
+      AdvanceMotion_CancelIfActive();
+      Chassis_Stop();
+    }
     OPS_Poll();
     WIT_Poll();
     AdvanceWorld_Poll();
@@ -570,6 +582,11 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     WIT_OnUartRxEvent(huart, Size);
   }
 
+  if (huart->Instance == USART3)
+  {
+    drive_emm_OnUartRxEvent(huart, Size);
+  }
+
   if (huart->Instance == USART1)
   {
     HostRx_OnUartRxEvent(huart, Size);
@@ -578,6 +595,19 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
   if (huart->Instance == USART6)
   {
     HostRx_OnUartRxEvent(huart, Size);
+  }
+
+  if (huart->Instance == USART3)
+  {
+    drive_emm_OnUartError(huart);
+  }
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart->Instance == USART3)
+  {
+    drive_emm_OnTxComplete(huart);
   }
 }
 

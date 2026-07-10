@@ -16,6 +16,7 @@ static const ChassisMotorConfig g_chassis_motors[4] = {
     {CHASSIS_MOTOR_LR_ID, CHASSIS_MOTOR_LR_SIGN},
     {CHASSIS_MOTOR_RR_ID, CHASSIS_MOTOR_RR_SIGN},
 };
+static uint8_t g_chassis_motion_command_active = 0U;
 
 static uint16_t Chassis_AbsLimitRpm(int16_t rpm)
 {
@@ -122,24 +123,10 @@ static void Chassis_SetMotorRPMScaledEx(int32_t lf_rpm, int32_t rf_rpm, int32_t 
   Chassis_SetMotorRPMEx((int16_t)lf_rpm, (int16_t)rf_rpm, (int16_t)lr_rpm, (int16_t)rr_rpm, acc);
 }
 
-static void Chassis_WaitEmmUartReady(void)
-{
-  uint32_t start_tick = HAL_GetTick();
-
-  while (HAL_UART_GetState(drive_emm_UART) != HAL_UART_STATE_READY)
-  {
-    if ((HAL_GetTick() - start_tick) >= CHASSIS_UART_WAIT_TIMEOUT_MS)
-    {
-      break;
-    }
-  }
-}
-
 static void Chassis_SendLoadedCommand(void)
 {
-  Chassis_WaitEmmUartReady();
+  /* drive_emm 内部 DMA 队列保证两帧按顺序发送，控制周期不阻塞等待 UART。 */
   drive_emm_Multi_Motor_Cmd(CHASSIS_SYNC_ADDR);
-  Chassis_WaitEmmUartReady();
   drive_emm_Synchronous_motion(CHASSIS_SYNC_ADDR);
 }
 
@@ -175,6 +162,7 @@ void Chassis_Stop(void)
   }
 
   Chassis_SendLoadedCommand();
+  g_chassis_motion_command_active = 0U;
 }
 
 void Chassis_SmoothStop(uint8_t acc)
@@ -196,6 +184,13 @@ void Chassis_SetMotorRPMEx(int16_t lf_rpm, int16_t rf_rpm, int16_t lr_rpm, int16
   Chassis_LoadMotorSpeed(&g_chassis_motors[3], rr_rpm, acc);
 
   Chassis_SendLoadedCommand();
+  g_chassis_motion_command_active = ((lf_rpm != 0) || (rf_rpm != 0) ||
+                                     (lr_rpm != 0) || (rr_rpm != 0)) ? 1U : 0U;
+}
+
+uint8_t Chassis_IsMotionCommandActive(void)
+{
+  return g_chassis_motion_command_active;
 }
 
 void Chassis_SetBodyVelocity(float vx_right_mm_s, float vy_forward_mm_s, float wz_ccw_deg_s)
