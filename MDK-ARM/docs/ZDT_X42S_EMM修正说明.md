@@ -2,6 +2,8 @@
 
 依据文件：`ZDT_X42S第二代闭环步进电机用户手册V1.0.3_251224.pdf`。
 
+> 当前工程实际驱动文件为 `Core/Inc/drive_emm.h` 和 `Core/Src/drive_emm.c`，不再使用本文历史内容中的 `zdt_stepper`、`Emm_V5` 或 `chassis_motion` 文件名。完整的闭环与通信保护说明见 `docs/下位机闭环与安全修复说明.md`。
+
 ## 修正依据
 
 - 串口 TTL/RS485 自由协议格式：`Addr + Code + Data + CheckSum`。
