@@ -972,6 +972,8 @@ void HostProtocol_Poll(void)
   HostProtocol_Frame_t frame;
   HostProtocol_AckResult_t result;
 
+  /* UART 暂忙或错误恢复后，在下一协议周期重试队首帧。 */
+  HostProtocol_StartNextTx();
   HostProtocol_CheckHeartbeatTimeout();
 
   while (HostProtocol_DequeueFrame(&frame) != 0U)
