@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from threading import RLock
 from typing import Optional
 
 from .commands import AckCode, MsgType
@@ -26,6 +27,7 @@ class SerialTransport:
         self._parser = FrameParser()
         self._pending: list[Frame] = []
         self._next_seq = 1
+        self._lock = RLock()
 
         if serial_instance is not None:
             self.serial = serial_instance
@@ -61,17 +63,18 @@ class SerialTransport:
         payload: bytes = b"",
         expect_data: bool = False,
     ) -> Frame | None:
-        seq = self.next_seq()
-        self.serial.write(pack_frame(MsgType.CMD, cmd_set, cmd_id, seq, payload))
-        ack_frame = self.wait_for_ack(seq, cmd_set, cmd_id, self.ack_timeout)
-        ack = parse_ack(ack_frame)
-        if ack.ack_seq != seq:
-            raise ProtocolTimeoutError(f"ACK seq mismatch: expected {seq}, got {ack.ack_seq}")
-        if ack.result != AckCode.OK:
-            raise CommandRejectedError(cmd_set, cmd_id, seq, ack.result, ack.detail)
-        if expect_data:
-            return self.wait_for_data(seq, cmd_set, cmd_id, self.data_timeout)
-        return None
+        with self._lock:
+            seq = self.next_seq()
+            self.serial.write(pack_frame(MsgType.CMD, cmd_set, cmd_id, seq, payload))
+            ack_frame = self.wait_for_ack(seq, cmd_set, cmd_id, self.ack_timeout)
+            ack = parse_ack(ack_frame)
+            if ack.ack_seq != seq:
+                raise ProtocolTimeoutError(f"ACK seq mismatch: expected {seq}, got {ack.ack_seq}")
+            if ack.result != AckCode.OK:
+                raise CommandRejectedError(cmd_set, cmd_id, seq, ack.result, ack.detail)
+            if expect_data:
+                return self.wait_for_data(seq, cmd_set, cmd_id, self.data_timeout)
+            return None
 
     def wait_for_ack(self, seq: int, cmd_set: int, cmd_id: int, timeout: float) -> Frame:
         return self._wait_for_frame(MsgType.ACK, seq, cmd_set, cmd_id, timeout, "ACK")
@@ -80,14 +83,15 @@ class SerialTransport:
         return self._wait_for_frame(MsgType.DATA, seq, cmd_set, cmd_id, timeout, "DATA")
 
     def read_status(self, timeout: float = 0.0) -> Optional[Frame]:
-        deadline = time.monotonic() + timeout
-        while True:
-            frame = self._pop_matching(MsgType.STATUS, None, None, None)
-            if frame is not None:
-                return frame
-            if timeout == 0.0 or time.monotonic() >= deadline:
-                return None
-            self._read_once()
+        with self._lock:
+            deadline = time.monotonic() + timeout
+            while True:
+                frame = self._pop_matching(MsgType.STATUS, None, None, None)
+                if frame is not None:
+                    return frame
+                if timeout == 0.0 or time.monotonic() >= deadline:
+                    return None
+                self._read_once()
 
     def _wait_for_frame(
         self,

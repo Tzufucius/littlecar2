@@ -42,6 +42,17 @@ class ChassisCmd(IntEnum):
     STOP = 0x02
     SET_MOTOR_RPM = 0x03
     MOVE_MECANUM = 0x04
+    SET_BODY_VELOCITY = 0x05
+    SET_WORLD_VELOCITY = 0x06
+    GOTO_POSE = 0x07
+    CANCEL_GOAL = 0x08
+    RESET_WORLD_ORIGIN = 0x09
+    GET_WORLD_POSE = 0x0A
+    GET_MOTION_STATUS = 0x0B
+
+
+class ServoCmd(IntEnum):
+    ARM_GRAB = 0x10
 
 
 class SensorCmd(IntEnum):
@@ -61,3 +72,13 @@ class AckCode(IntEnum):
     DENIED = 0x05
     UNKNOWN_CMD = 0x06
     FAULT = 0x07
+
+
+class MotionState(IntEnum):
+    IDLE = 0x00
+    RUNNING = 0x01
+    ARRIVED = 0x02
+    TIMEOUT = 0x03
+    NO_POSE = 0x04
+    NO_ORIGIN = 0x05
+    CANCELED = 0x06

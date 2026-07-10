@@ -1,4 +1,4 @@
-﻿/* USER CODE BEGIN Header */
+/* USER CODE BEGIN Header */
 /**
  ******************************************************************************
  * @file           : main.c
@@ -30,6 +30,7 @@
 #include "advance_motion.h"
 #include "advance_world.h"
 #include "comm_pc.h"
+#include "comm_protocol.h"
 #include "car_pose.h"
 
 /* USER CODE END Includes */
@@ -46,6 +47,15 @@
 /* 发布固件保持 0，避免 printf 的逐字节阻塞影响控制周期。 */
 #define DEBUG_UART_ENABLE (0U)
 
+/* TIM6 仅置位这些任务，不在中断上下文执行业务逻辑。 */
+#define APP_TASK_PROTOCOL ((uint32_t)0x00000001U)
+#define APP_TASK_WORLD ((uint32_t)0x00000002U)
+#define APP_TASK_SAFETY ((uint32_t)0x00000004U)
+#define APP_TASK_MOTION ((uint32_t)0x00000008U)
+#define APP_TASK_MOTOR ((uint32_t)0x00000010U)
+#define APP_TASK_ORIGIN ((uint32_t)0x00000020U)
+#define APP_TASK_LED ((uint32_t)0x00000040U)
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -54,6 +64,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim6;
+
 UART_HandleTypeDef huart4;
 UART_HandleTypeDef huart5;
 UART_HandleTypeDef huart1;
@@ -68,8 +80,7 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_usart6_tx;
 
 /* USER CODE BEGIN PV */
-// static uint32_t g_wit_print_tick = 0U;
-static uint32_t g_world_origin_retry_tick = 0U;
+static volatile uint32_t g_app_pending_tasks = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -82,6 +93,7 @@ static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_USART6_UART_Init(void);
+static void MX_TIM6_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -151,12 +163,81 @@ void test() // 测试的东西全写在里面
   testEmmV5Datou(CHASSIS_MOTOR_RR_ID);
 }
 
+static uint32_t App_TakePendingTasks(void)
+{
+  uint32_t pending;
+
+  __disable_irq();
+  pending = g_app_pending_tasks;
+  g_app_pending_tasks = 0U;
+  __enable_irq();
+  return pending;
+}
+
+static void App_TryResetWorldOrigin(void)
+{
+  if (AdvanceWorld_GetPose()->origin_ready == 0U)
+  {
+    (void)AdvanceWorld_ResetOrigin();
+  }
+}
+
+static void App_SafetyCheck(void)
+{
+  if ((Chassis_IsMotionCommandActive() != 0U) &&
+      (drive_emm_IsChassisFeedbackHealthy() == 0U))
+  {
+    AdvanceMotion_CancelIfActive();
+    Chassis_Stop();
+  }
+}
+
+static void App_RunScheduledTasks(uint32_t pending)
+{
+  if ((pending & APP_TASK_PROTOCOL) != 0U)
+  {
+    HostRx_Poll();
+  }
+
+  if ((pending & APP_TASK_WORLD) != 0U)
+  {
+    OPS_Poll();
+    WIT_Poll();
+    AdvanceWorld_Poll();
+  }
+
+  if ((pending & APP_TASK_MOTOR) != 0U)
+  {
+    drive_emm_Poll();
+  }
+
+  if ((pending & APP_TASK_ORIGIN) != 0U)
+  {
+    App_TryResetWorldOrigin();
+  }
+
+  if ((pending & APP_TASK_SAFETY) != 0U)
+  {
+    App_SafetyCheck();
+  }
+
+  if ((pending & APP_TASK_MOTION) != 0U)
+  {
+    AdvanceMotion_Poll();
+  }
+
+  if ((pending & APP_TASK_LED) != 0U)
+  {
+    situation_led();
+  }
+}
+
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
+  * @brief  The application entry point.
+  * @retval int
+  */
 int main(void)
 {
 
@@ -189,6 +270,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
   MX_USART6_UART_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
 
   // 传感器初始化
@@ -220,8 +302,11 @@ int main(void)
     printf("HostRx Jetson init failed\r\n");
   }
 
-  /* 不阻塞等待传感器；主循环在 OPS 有效后建立原点。 */
-  g_world_origin_retry_tick = HAL_GetTick() - WORLD_ORIGIN_RETRY_MS;
+  /* 原点建立由 1 s 调度任务重试，不阻塞等待 OPS 数据。 */
+  if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
   // 测试函数
   // test();
@@ -235,46 +320,36 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    // BusServo_Poll();
-    drive_emm_Poll();
-    if ((Chassis_IsMotionCommandActive() != 0U) && (drive_emm_IsChassisFeedbackHealthy() == 0U))
+    uint32_t pending = App_TakePendingTasks();
+    if (pending == 0U)
     {
-      AdvanceMotion_CancelIfActive();
-      Chassis_Stop();
+      __WFI();
     }
-    OPS_Poll();
-    WIT_Poll();
-    AdvanceWorld_Poll();
-    if ((AdvanceWorld_GetPose()->origin_ready == 0U) &&
-        ((HAL_GetTick() - g_world_origin_retry_tick) >= WORLD_ORIGIN_RETRY_MS))
+    else
     {
-      g_world_origin_retry_tick = HAL_GetTick();
-      (void)AdvanceWorld_ResetOrigin();
+      App_RunScheduledTasks(pending);
     }
-    HostRx_Poll();
-    AdvanceMotion_Poll();
-    situation_led();
   }
   /* USER CODE END 3 */
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
+  * @brief System Clock Configuration
+  * @retval None
+  */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Configure the main internal regulator output voltage
-   */
+  */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
   /** Initializes the RCC Oscillators according to the specified parameters
-   * in the RCC_OscInitTypeDef structure.
-   */
+  * in the RCC_OscInitTypeDef structure.
+  */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
@@ -289,8 +364,9 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-   */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
@@ -303,10 +379,48 @@ void SystemClock_Config(void)
 }
 
 /**
- * @brief UART4 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 8399;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 9;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
+
+}
+
+/**
+  * @brief UART4 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_UART4_Init(void)
 {
 
@@ -332,13 +446,14 @@ static void MX_UART4_Init(void)
   /* USER CODE BEGIN UART4_Init 2 */
 
   /* USER CODE END UART4_Init 2 */
+
 }
 
 /**
- * @brief UART5 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief UART5 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_UART5_Init(void)
 {
 
@@ -364,13 +479,14 @@ static void MX_UART5_Init(void)
   /* USER CODE BEGIN UART5_Init 2 */
 
   /* USER CODE END UART5_Init 2 */
+
 }
 
 /**
- * @brief USART1 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_USART1_UART_Init(void)
 {
 
@@ -396,13 +512,14 @@ static void MX_USART1_UART_Init(void)
   /* USER CODE BEGIN USART1_Init 2 */
 
   /* USER CODE END USART1_Init 2 */
+
 }
 
 /**
- * @brief USART2 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_USART2_UART_Init(void)
 {
 
@@ -428,13 +545,14 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */
+
 }
 
 /**
- * @brief USART3 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief USART3 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_USART3_UART_Init(void)
 {
 
@@ -460,13 +578,14 @@ static void MX_USART3_UART_Init(void)
   /* USER CODE BEGIN USART3_Init 2 */
 
   /* USER CODE END USART3_Init 2 */
+
 }
 
 /**
- * @brief USART6 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief USART6 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_USART6_UART_Init(void)
 {
 
@@ -492,11 +611,12 @@ static void MX_USART6_UART_Init(void)
   /* USER CODE BEGIN USART6_Init 2 */
 
   /* USER CODE END USART6_Init 2 */
+
 }
 
 /**
- * Enable DMA controller clock
- */
+  * Enable DMA controller clock
+  */
 static void MX_DMA_Init(void)
 {
 
@@ -506,30 +626,31 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA1_Stream1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream1_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream1_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream1_IRQn);
   /* DMA1_Stream3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
   /* DMA1_Stream5_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
   /* DMA2_Stream1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 4, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);
   /* DMA2_Stream2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
   /* DMA2_Stream6_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream6_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream6_IRQn, 4, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream6_IRQn);
+
 }
 
 /**
- * @brief GPIO Initialization Function
- * @param None
- * @retval None
- */
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -546,10 +667,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_9 | GPIO_PIN_10, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_9|GPIO_PIN_10, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PF9 PF10 */
-  GPIO_InitStruct.Pin = GPIO_PIN_9 | GPIO_PIN_10;
+  GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_10;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -597,10 +718,6 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     HostRx_OnUartRxEvent(huart, Size);
   }
 
-  if (huart->Instance == USART3)
-  {
-    drive_emm_OnUartError(huart);
-  }
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
@@ -609,10 +726,25 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
   {
     drive_emm_OnTxComplete(huart);
   }
+
+  if ((huart->Instance == USART1) || (huart->Instance == USART6))
+  {
+    HostProtocol_OnUartTxComplete(huart);
+  }
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
+  if (huart->Instance == USART3)
+  {
+    drive_emm_OnUartError(huart);
+  }
+
+  if ((huart->Instance == USART1) || (huart->Instance == USART6))
+  {
+    HostProtocol_OnUartError(huart);
+  }
+
   if (huart->Instance == UART4)
   {
     BusServo_OnUartError();
@@ -639,12 +771,64 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
   }
 }
 
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  static uint16_t protocol_tick = 0U;
+  static uint16_t world_tick = 0U;
+  static uint16_t safety_tick = 0U;
+  static uint16_t motion_tick = 0U;
+  static uint16_t motor_tick = 0U;
+  static uint16_t origin_tick = 0U;
+  static uint16_t led_tick = 0U;
+
+  if (htim->Instance != TIM6)
+  {
+    return;
+  }
+
+  if (++protocol_tick >= 2U)
+  {
+    protocol_tick = 0U;
+    g_app_pending_tasks |= APP_TASK_PROTOCOL;
+  }
+  if (++world_tick >= 10U)
+  {
+    world_tick = 0U;
+    g_app_pending_tasks |= APP_TASK_WORLD;
+  }
+  if (++safety_tick >= 10U)
+  {
+    safety_tick = 0U;
+    g_app_pending_tasks |= APP_TASK_SAFETY;
+  }
+  if (++motion_tick >= 20U)
+  {
+    motion_tick = 0U;
+    g_app_pending_tasks |= APP_TASK_MOTION;
+  }
+  if (++motor_tick >= 20U)
+  {
+    motor_tick = 0U;
+    g_app_pending_tasks |= APP_TASK_MOTOR;
+  }
+  if (++origin_tick >= WORLD_ORIGIN_RETRY_MS)
+  {
+    origin_tick = 0U;
+    g_app_pending_tasks |= APP_TASK_ORIGIN;
+  }
+  if (++led_tick >= 500U)
+  {
+    led_tick = 0U;
+    g_app_pending_tasks |= APP_TASK_LED;
+  }
+}
+
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -657,12 +841,12 @@ void Error_Handler(void)
 }
 #ifdef USE_FULL_ASSERT
 /**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */

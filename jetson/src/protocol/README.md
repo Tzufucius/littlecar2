@@ -25,7 +25,8 @@ from protocol import Car
 
 with Car(port="COM8", baudrate=115200) as car:
     car.system.ping()
-    car.system.heartbeat()
+    car.heartbeat.start()
+    car.safety.clear()
     car.chassis.enable(True)
     car.chassis.move_mecanum(forward=80, strafe=0, rotate=0, acc=10)
     car.chassis.stop(mode=1)
@@ -52,8 +53,12 @@ car.system.ping()
 - `car.chassis.stop(mode=1)`：停止底盘。
 - `car.chassis.set_motor_rpm(lf, rf, lr, rr, acc=10)`：设置四轮 RPM。
 - `car.chassis.move_mecanum(forward, strafe, rotate, acc=10)`：发送麦克纳姆轮速度指令。
-- `car.wit.get_data()`：发送 `SENSOR_GET_IMU`，收到 `MSG_DATA` 后解析为 `ImuData`。
-- `car.ops.get_pose()`：发送 `SENSOR_GET_OPS`，收到 `MSG_DATA` 后解析为 `OpsPose`。
+- `car.chassis.set_body_velocity(vx_mm_s, vy_mm_s, wz_cdeg_s, acc=10)`：发送车体坐标速度。
+- `car.chassis.set_world_velocity(vx_mm_s, vy_mm_s, wz_cdeg_s, acc=10)`：发送 world 坐标速度。
+- `car.chassis.goto_pose(WorldGoal(...))` / `cancel_goal()`：下发或取消异步目标点。
+- `car.chassis.reset_world_origin()`：以当前有效传感器数据建立 world 原点。
+- `car.chassis.get_motion_status()`：查询异步目标状态，返回 `MotionStatus`。
+- `car.heartbeat.start()` / `stop()`：启动或停止默认 100 ms 的后台心跳服务。
 - `car.read_status(timeout=0.0)`：读取一帧周期 `MSG_STATUS`，无数据时返回 `None`。
 
 ## 异常语义
@@ -64,4 +69,4 @@ car.system.ping()
 
 ## 当前限制
 
-当前 STM32 侧已实现 `SYSTEM`、`SAFETY`、`CHASSIS` 的 ACK 类命令。`SENSOR_GET_IMU` 和 `SENSOR_GET_OPS` 的 Python 接口已经按协议预留，但真实数据依赖下位机后续实现 `CMDSET_SENSOR` 查询命令和对应 `MSG_DATA` 返回。在下位机未实现前，这两个接口预期会收到 `UNKNOWN_CMD` 或等待 DATA 超时。
+当前 STM32 侧已实现 `SYSTEM`、`SAFETY` 和 `CHASSIS`，其中 `CHASSIS_GET_MOTION_STATUS` 会在 ACK 后返回 `MSG_DATA`。`SENSOR_GET_IMU`、`SENSOR_GET_OPS` 和周期 `MSG_STATUS` 尚未由 STM32 `comm_protocol.c` 分发；相关解析函数只作为后续协议扩展的内部预留，不能用于正式联动流程。

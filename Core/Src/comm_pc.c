@@ -1,5 +1,8 @@
 #include "comm_pc.h"
 #include "comm_protocol.h"
+
+/* 发布固件关闭原始收包日志，避免协议调度路径执行阻塞式 printf。 */
+#define COMM_PC_RAW_DEBUG_ENABLE (0U)
 #include <stdio.h>
 #include <string.h>
 
@@ -303,10 +306,12 @@ HostRx_Status_t HostRx_InitJetson(UART_HandleTypeDef *huart)
 
 void HostRx_Poll(void)
 {
-  /* 先执行正式协议命令，再输出原始收包日志，方便观察命令和 ACK。 */
+  /* 协议业务由主循环的 TIM6 调度任务执行，不在 UART 中断中运行。 */
   HostProtocol_Poll();
+#if (COMM_PC_RAW_DEBUG_ENABLE != 0U)
   HostRx_PrintChannel(&g_comm_pc_channels[comm_pc_SOURCE_PC]);
   HostRx_PrintChannel(&g_comm_pc_channels[comm_pc_SOURCE_JETSON]);
+#endif
 }
 
 void HostRx_OnUartRxEvent(UART_HandleTypeDef *huart, uint16_t size)

@@ -1,9 +1,9 @@
 #ifndef __ADVANCE_ARM_H__
 #define __ADVANCE_ARM_H__
-#endif
 
 #include "drive_bus_servo.h"
 #include "drive_emm.h"
+#include <stdint.h>
 
 /*
 - 步进电机
@@ -20,9 +20,11 @@
 # define CHASSIS_SERVO_ARM_GRAB_ID 2U
 # define CHASSIS_SERVO_ARM_PLATE_ID 3U
 
-void arm_init(void);
-void arm_rotate_plate(uint16_t acceleration, int32_t position, uint16_t speed);
-void arm_grab(uint8_t state);
-void arm_rotate(uint16_t acceleration, int32_t position, uint16_t speed);
-void arm_lift(uint16_t acceleration, int32_t position, uint16_t speed);
-void arm_swing(uint16_t acceleration, int32_t position, uint16_t speed);
+/* 夹爪开合位置集中在下位机，实车标定后只修改这两个宏。 */
+#define ADVANCE_ARM_GRAB_RELEASE_POSITION ((int32_t)0)
+#define ADVANCE_ARM_GRAB_CLOSE_POSITION ((int32_t)1000)
+
+/* 上位机协议层只开放夹爪开合；其他机械臂能力后续单独设计命令。 */
+BusServo_Status_t AdvanceArm_Grab(uint8_t closed);
+
+#endif

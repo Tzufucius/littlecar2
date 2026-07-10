@@ -20,14 +20,25 @@ virtualFolder:
           folders:
             - name: Core
               files:
+                - path: ../Core/Src/drive_bus_servo.c
+                - path: ../Core/Src/drive_emm.c
+                - path: ../Core/Src/advance_chassis.c
+                - path: ../Core/Src/advance_world.c
+                - path: ../Core/Src/advance_motion.c
+                - path: ../Core/Src/car_pose.c
+                - path: ../Core/Src/sensor_ops.c
+                - path: ../Core/Src/sensor_wit.c
+                - path: ../Core/Src/comm_jetson.c
+                - path: ../Core/Src/comm_pc.c
+                - path: ../Core/Src/comm_protocol.c
+                - path: ../Core/Src/advance_arm.c
                 - path: ../Core/Src/main.c
                 - path: ../Core/Src/stm32f4xx_it.c
                 - path: ../Core/Src/stm32f4xx_hal_msp.c
-                - path: ../Core/Inc/main.h
-                - path: ../Core/Inc/stm32f4xx_hal_conf.h
-                - path: ../Core/Inc/stm32f4xx_it.h
-                - path: ../Core/Src/system_stm32f4xx.c
+                - path: ../Core/Inc/advance_arm.h
                 - path: ../Core/Inc/advance_chassis.h
+                - path: ../Core/Inc/advance_motion.h
+                - path: ../Core/Inc/advance_world.h
                 - path: ../Core/Inc/car_pose.h
                 - path: ../Core/Inc/comm_jetson.h
                 - path: ../Core/Inc/comm_pc.h
@@ -36,28 +47,16 @@ virtualFolder:
                 - path: ../Core/Inc/drive_emm.h
                 - path: ../Core/Inc/sensor_ops.h
                 - path: ../Core/Inc/sensor_wit.h
-                - path: ../Core/Src/advance_chassis.c
-                - path: ../Core/Src/car_pose.c
-                - path: ../Core/Src/comm_jetson.c
-                - path: ../Core/Src/comm_pc.c
-                - path: ../Core/Src/comm_protocol.c
-                - path: ../Core/Src/drive_bus_servo.c
-                - path: ../Core/Src/drive_emm.c
-                - path: ../Core/Src/sensor_ops.c
-                - path: ../Core/Src/sensor_wit.c
-                - path: ../Core/Src/advance_world.c
-                - path: ../Core/Inc/advance_world.h
-                - path: ../Core/Inc/advance_motion.h
-                - path: ../Core/Src/advance_motion.c
-                - path: ../Core/Src/advance_arm.c
-                - path: ../Core/Inc/advance_arm.h
+                - path: ../Core/Inc/stm32f4xx_hal_conf.h
+                - path: ../Core/Inc/stm32f4xx_it.h
               folders: []
     - name: Drivers
       files: []
       folders:
         - name: STM32F4xx_HAL_Driver
           files:
-            - path: ../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c
+            - path: ../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c
+            - path: ../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c
             - path: ../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c
             - path: ../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c
             - path: ../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c
@@ -71,6 +70,7 @@ virtualFolder:
             - path: ../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c
             - path: ../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c
             - path: ../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c
+            - path: ../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c
           folders: []
         - name: CMSIS
           files:
@@ -96,7 +96,8 @@ targets:
         - RTE/_4-29
       libList: []
     excludeList: []
-    settings: {}
+    settings:
+      debugger: cortex-debug
     toolchain: AC5
     toolchainConfigMap:
       AC5:
@@ -128,8 +129,8 @@ targets:
             - id: 1
               isChecked: false
               mem:
-                size: "0x100000"
-                startAddr: "0x68000000"
+                size: "0x0"
+                startAddr: "0x0"
               noInit: false
               tag: RAM
             - id: 2
@@ -149,15 +150,15 @@ targets:
             - id: 1
               isChecked: true
               mem:
-                size: "0x20000"
+                size: "0x00020000"
                 startAddr: "0x20000000"
               noInit: false
               tag: IRAM
             - id: 2
-              isChecked: true
+              isChecked: false
               mem:
-                size: "0x10000"
-                startAddr: "0x10000000"
+                size: "0x0"
+                startAddr: "0x0"
               noInit: false
               tag: IRAM
           ROM:
@@ -186,11 +187,11 @@ targets:
               isChecked: true
               isStartup: true
               mem:
-                size: "0x100000"
+                size: "0x00100000"
                 startAddr: "0x08000000"
               tag: IROM
             - id: 2
-              isChecked: true
+              isChecked: false
               isStartup: false
               mem:
                 size: "0x0"
@@ -201,26 +202,7 @@ targets:
         archExtensions: ""
         cpuType: Cortex-M4
         floatingPointHardware: single
-        options:
-          version: 3
-          afterBuildTasks: []
-          asm-compiler:
-            $use: asm-auto
-            misc-controls: ""
-          beforeBuildTasks: []
-          c/cpp-compiler:
-            language-c: c99
-            language-cpp: c++11
-            link-time-optimization: false
-            optimization: level-0
-          global:
-            output-debug-info: enable
-            use-microLIB: false
-          linker:
-            $outputTaskExcludes:
-              - .bin
-            misc-controls: --diag_suppress=L6329
-            output-format: elf
+        options: ""
         scatterFilePath: <YOUR_SCATTER_FILE>.sct
         storageLayout:
           RAM:
