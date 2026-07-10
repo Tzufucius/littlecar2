@@ -11,6 +11,7 @@
 - `src/app/`：视觉主流程入口和业务编排。
 - `src/domain/`：视觉流程事件模型。
 - `src/protocol/`：Jetson 上位机通信协议包，提供 `Car` 高层接口。
+- `docs/`：上位机通信架构、接口边界和开发约束。
 - `assets/`：测试图片和模型文件。
 - `scripts/`：可直接运行的视觉调试脚本。
 
@@ -23,6 +24,12 @@ python -m app.main
 ```
 
 当前 `src/app/main.py` 仍然只负责视觉主流程，不主动接入串口协议。协议能力放在 `src/protocol/` 中，后续如果需要联动视觉和底盘，可以在业务层显式引入 `from protocol import Car`。
+
+## 上位机开发约束
+
+上位机对 STM32 的唯一通信入口是 `protocol.Car`。`app/` 和 `vision/` 不得直接读写串口或自行拼装协议帧；安全、心跳、ACK 异常和新增能力的完整约束见 [docs/上位机开发约束.md](docs/上位机开发约束.md)。
+
+通信链路、下位机实际实现范围及调用顺序见 [docs/通信架构.md](docs/通信架构.md)。
 
 ## 常用脚本
 

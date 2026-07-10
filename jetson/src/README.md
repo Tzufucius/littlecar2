@@ -20,3 +20,5 @@ python -m app.main
 ```python
 from protocol import Car
 ```
+
+通信模块与 STM32 `comm_*` 的分层对应关系、当前已实现命令和开发限制见 `../docs/通信架构.md` 与 `../docs/上位机开发约束.md`。
