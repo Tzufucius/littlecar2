@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from protocol import Car, WorldGoal
-from protocol.commands import AckCode, ChassisCmd, CmdSet, MsgType
+from protocol.commands import AckCode, ChassisCmd, CmdSet, MsgType, ServoCmd
 from protocol.frame import pack_frame, unpack_frame
 from protocol.transport import SerialTransport
 
@@ -123,6 +123,15 @@ class ProtocolClientTest(unittest.TestCase):
         self.assertEqual(status.pose_x_mm, 100)
         self.assertEqual(status.goal_yaw_cdeg, 600)
         self.assertEqual(status.updated_tick, 900)
+
+    def test_arm_grab_and_release_use_servo_command(self):
+        self.car.arm.grab()
+        self.car.arm.release()
+
+        self.assertEqual(
+            [(frame.cmd_set, frame.cmd_id, frame.payload) for frame in self.serial.writes],
+            [(CmdSet.SERVO, ServoCmd.ARM_GRAB, b"\x01"), (CmdSet.SERVO, ServoCmd.ARM_GRAB, b"\x00")],
+        )
 
     def test_close_closes_transport(self):
         self.car.close()

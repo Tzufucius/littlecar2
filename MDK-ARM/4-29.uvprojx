@@ -442,6 +442,11 @@
               <FilePath>../Core/Src/comm_protocol.c</FilePath>
             </File>
             <File>
+              <FileName>advance_arm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/advance_arm.c</FilePath>
+            </File>
+            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/main.c</FilePath>

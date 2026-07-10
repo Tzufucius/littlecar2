@@ -5,7 +5,7 @@ from __future__ import annotations
 import struct
 import time
 
-from .commands import ChassisCmd, CmdSet, SafetyCmd, SensorCmd, SystemCmd
+from .commands import ChassisCmd, CmdSet, SafetyCmd, SensorCmd, ServoCmd, SystemCmd
 from .frame import parse_imu_data, parse_motion_status, parse_ops_pose, parse_status_report
 from .heartbeat import HeartbeatRunner
 from .transport import SerialTransport
@@ -30,6 +30,7 @@ class Car:
         self.system = SystemClient(self.transport)
         self.safety = SafetyClient(self.transport)
         self.chassis = ChassisClient(self.transport)
+        self.arm = ArmClient(self.transport)
         self.wit = WitClient(self.transport)
         self.ops = OpsClient(self.transport)
         self.heartbeat = HeartbeatRunner(self.system)
@@ -37,6 +38,7 @@ class Car:
         self.System = self.system
         self.Safety = self.safety
         self.Chassis = self.chassis
+        self.Arm = self.arm
         self.Wit = self.wit
         self.Ops = self.ops
 
@@ -147,6 +149,19 @@ class ChassisClient:
         if frame is None:
             raise RuntimeError("expected motion-status DATA frame")
         return parse_motion_status(frame.payload)
+
+
+class ArmClient:
+    """High-level arm actions currently implemented by the STM32 protocol."""
+
+    def __init__(self, transport: SerialTransport) -> None:
+        self._transport = transport
+
+    def grab(self) -> None:
+        self._transport.send_command(CmdSet.SERVO, ServoCmd.ARM_GRAB, b"\x01")
+
+    def release(self) -> None:
+        self._transport.send_command(CmdSet.SERVO, ServoCmd.ARM_GRAB, b"\x00")
 
 
 class WitClient:

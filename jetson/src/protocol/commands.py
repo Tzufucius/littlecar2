@@ -51,6 +51,10 @@ class ChassisCmd(IntEnum):
     GET_MOTION_STATUS = 0x0B
 
 
+class ServoCmd(IntEnum):
+    ARM_GRAB = 0x10
+
+
 class SensorCmd(IntEnum):
     GET_OPS = 0x01
     GET_IMU = 0x02
