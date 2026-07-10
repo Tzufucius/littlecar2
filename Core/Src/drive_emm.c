@@ -319,7 +319,7 @@ void drive_emm_Restore_Motor(uint8_t addr)
 void drive_emm_Multi_Motor_Cmd(uint8_t addr)
 {
   uint16_t i = 0, j = 0, len = 0;
-  __IO static uint8_t cmd[MMCL_LEN] = {0};
+  __IO static uint8_t cmd[MMCL_LEN + 5U] = {0};
 
   // 多电机命令长度大于0
   if (MMCL_count > 0)
