@@ -9,6 +9,14 @@ extern "C"
 #include "main.h"
 #include <stdint.h>
 
+/*
+ * OPS 帧有效性门限。按实际场地、定位刷新率和最高车速标定；超限帧不会覆盖上一帧。
+ */
+#define OPS_MAX_ABS_POSITION_MM (10000.0f)
+#define OPS_MAX_ABS_ANGLE_DEG (720.0f)
+#define OPS_MAX_ABS_WZ_DPS (720.0f)
+#define OPS_MAX_POSITION_JUMP_MM (1000.0f)
+
   typedef enum
   {
     OPS_STATUS_OK = 0,

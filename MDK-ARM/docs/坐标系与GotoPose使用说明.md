@@ -136,7 +136,9 @@ AdvanceWorld_GetPose(&pose);
 | `origin_ready` | 0/1 | 软件原点是否建立 |
 | `updated_tick` | ms | 位姿更新时间 |
 
-当前阶段不做 OPS 偏心补偿，也不做 WIT / OPS 融合滤波。yaw 方向可以独立反转，后续如果需要更高精度，再增加偏心补偿、融合和标定参数。
+当前实现已提供 OPS 安装补偿配置：`ADVANCE_WORLD_OPS_X_REVERSED`、`ADVANCE_WORLD_OPS_Y_REVERSED`、`ADVANCE_WORLD_OPS_XY_SWAPPED`、`ADVANCE_WORLD_OPS_YAW_OFFSET_DEG`、`ADVANCE_WORLD_OPS_OFFSET_X_MM`、`ADVANCE_WORLD_OPS_OFFSET_Y_MM`。偏移量以底盘旋转中心为基准，软件会先把 OPS 传感器坐标换算为底盘中心坐标，再建立 world 原点。
+
+`WorldPose2D_t` 同时保存位置更新时间 `updated_tick` 与航向更新时间 `yaw_updated_tick`。原点建立时若选用了 WIT yaw，则 WIT 失效会使 world 位姿失效，而不会静默切回 OPS yaw，避免两个零点基准不同导致航向跳变。
 
 ## 5. 世界速度到车体速度
 
@@ -201,7 +203,7 @@ AdvanceMotion_GetStatus(&status);
 AdvanceMotion_Cancel();
 ```
 
-注意：当前实现没有修改 `main.c`。实车运行时必须在主循环中周期调用 `AdvanceMotion_Poll()`，否则目标不会自动推进。
+`main.c` 已在 `HostRx_Poll()` 后周期调用 `AdvanceMotion_Poll()`。上位机命令在本轮被处理后可立即进入控制状态机；急停与取消命令会先撤销活动目标，阻止下一控制周期重新下发速度。
 
 ## 8. GotoPose 目标结构
 
@@ -344,7 +346,7 @@ position_error <= ADVANCE_MOTION_POS_TOLERANCE_MM
 abs(yaw_error) <= ADVANCE_MOTION_YAW_TOLERANCE_DEG
 ```
 
-满足条件后不会立刻进入 `ARRIVED`，而是需要连续保持：
+首次满足条件时会立即向底盘下发零速度；随后不会立刻进入 `ARRIVED`，而是需要连续保持：
 
 ```text
 ADVANCE_MOTION_ARRIVE_HOLD_MS

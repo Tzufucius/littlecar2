@@ -16,6 +16,7 @@ static const ChassisMotorConfig g_chassis_motors[4] = {
     {CHASSIS_MOTOR_LR_ID, CHASSIS_MOTOR_LR_SIGN},
     {CHASSIS_MOTOR_RR_ID, CHASSIS_MOTOR_RR_SIGN},
 };
+static uint8_t g_chassis_motion_command_active = 0U;
 
 static uint16_t Chassis_AbsLimitRpm(int16_t rpm)
 {
@@ -57,6 +58,19 @@ static int32_t Chassis_AbsI32(int32_t value)
 static int32_t Chassis_RoundFloatToI32(float value)
 {
   return (value >= 0.0f) ? (int32_t)(value + 0.5f) : (int32_t)(value - 0.5f);
+}
+
+static float Chassis_LimitFloat(float value, float limit)
+{
+  if (value > limit)
+  {
+    return limit;
+  }
+  if (value < -limit)
+  {
+    return -limit;
+  }
+  return value;
 }
 
 static int16_t Chassis_ScaleOneRpm(int32_t rpm, int32_t max_abs)
@@ -109,24 +123,10 @@ static void Chassis_SetMotorRPMScaledEx(int32_t lf_rpm, int32_t rf_rpm, int32_t 
   Chassis_SetMotorRPMEx((int16_t)lf_rpm, (int16_t)rf_rpm, (int16_t)lr_rpm, (int16_t)rr_rpm, acc);
 }
 
-static void Chassis_WaitEmmUartReady(void)
-{
-  uint32_t start_tick = HAL_GetTick();
-
-  while (HAL_UART_GetState(drive_emm_UART) != HAL_UART_STATE_READY)
-  {
-    if ((HAL_GetTick() - start_tick) >= CHASSIS_UART_WAIT_TIMEOUT_MS)
-    {
-      break;
-    }
-  }
-}
-
 static void Chassis_SendLoadedCommand(void)
 {
-  Chassis_WaitEmmUartReady();
+  /* drive_emm 内部 DMA 队列保证两帧按顺序发送，控制周期不阻塞等待 UART。 */
   drive_emm_Multi_Motor_Cmd(CHASSIS_SYNC_ADDR);
-  Chassis_WaitEmmUartReady();
   drive_emm_Synchronous_motion(CHASSIS_SYNC_ADDR);
 }
 
@@ -162,6 +162,7 @@ void Chassis_Stop(void)
   }
 
   Chassis_SendLoadedCommand();
+  g_chassis_motion_command_active = 0U;
 }
 
 void Chassis_SmoothStop(uint8_t acc)
@@ -183,6 +184,13 @@ void Chassis_SetMotorRPMEx(int16_t lf_rpm, int16_t rf_rpm, int16_t lr_rpm, int16
   Chassis_LoadMotorSpeed(&g_chassis_motors[3], rr_rpm, acc);
 
   Chassis_SendLoadedCommand();
+  g_chassis_motion_command_active = ((lf_rpm != 0) || (rf_rpm != 0) ||
+                                     (lr_rpm != 0) || (rr_rpm != 0)) ? 1U : 0U;
+}
+
+uint8_t Chassis_IsMotionCommandActive(void)
+{
+  return g_chassis_motion_command_active;
 }
 
 void Chassis_SetBodyVelocity(float vx_right_mm_s, float vy_forward_mm_s, float wz_ccw_deg_s)
@@ -192,9 +200,10 @@ void Chassis_SetBodyVelocity(float vx_right_mm_s, float vy_forward_mm_s, float w
 
 void Chassis_SetBodyVelocityEx(float vx_right_mm_s, float vy_forward_mm_s, float wz_ccw_deg_s, uint8_t acc)
 {
-  float vx = vx_right_mm_s * (float)CHASSIS_BODY_X_SIGN;
-  float vy = vy_forward_mm_s * (float)CHASSIS_BODY_Y_SIGN;
-  float wz_rad_s = wz_ccw_deg_s * (float)CHASSIS_BODY_WZ_SIGN * CHASSIS_PI / 180.0f;
+  float vx = Chassis_LimitFloat(vx_right_mm_s, CHASSIS_MAX_BODY_SPEED_MM_S) * (float)CHASSIS_BODY_X_SIGN;
+  float vy = Chassis_LimitFloat(vy_forward_mm_s, CHASSIS_MAX_BODY_SPEED_MM_S) * (float)CHASSIS_BODY_Y_SIGN;
+  float wz_rad_s = Chassis_LimitFloat(wz_ccw_deg_s, CHASSIS_MAX_BODY_WZ_DEG_S) *
+                   (float)CHASSIS_BODY_WZ_SIGN * CHASSIS_PI / 180.0f;
   float wheel_base = CHASSIS_HALF_LENGTH_MM + CHASSIS_HALF_WIDTH_MM;
   float rpm_per_mm_s = (60.0f * CHASSIS_MOTOR_GEAR_RATIO) / (2.0f * CHASSIS_PI * CHASSIS_WHEEL_RADIUS_MM);
   int32_t lf;
@@ -321,22 +330,22 @@ void Chassis_DifferentialTurnPreset(void)
   Chassis_DifferentialTurnEx(CHASSIS_DIFF_LEFT_PRESET_RPM, CHASSIS_DIFF_RIGHT_PRESET_RPM, CHASSIS_DIFF_PRESET_ACC);
 }
 
-void Chassis_MoveMecanum(int16_t forward_rpm, int16_t strafe_rpm, int16_t rotate_rpm)
+void Chassis_MoveMecanum(int16_t forward_rpm, int16_t strafe_rpm, int16_t wz_ccw_rpm)
 {
-  Chassis_MoveMecanumEx(forward_rpm, strafe_rpm, rotate_rpm, CHASSIS_DEFAULT_ACC);
+  Chassis_MoveMecanumEx(forward_rpm, strafe_rpm, wz_ccw_rpm, CHASSIS_DEFAULT_ACC);
 }
 
-void Chassis_MoveMecanumEx(int16_t forward_rpm, int16_t strafe_rpm, int16_t rotate_rpm, uint8_t acc)
+void Chassis_MoveMecanumEx(int16_t forward_rpm, int16_t strafe_rpm, int16_t wz_ccw_rpm, uint8_t acc)
 {
   /*
    * 麦克纳姆轮速度合成：
    * forward 控制前后，strafe 控制左右平移，rotate 控制原地转向。
    * 单个电机的方向修正统一在 Chassis_LoadMotorSpeed() 中处理。
    */
-  int32_t lf = (int32_t)forward_rpm + strafe_rpm + rotate_rpm;
-  int32_t rf = (int32_t)forward_rpm - strafe_rpm - rotate_rpm;
-  int32_t lr = (int32_t)forward_rpm - strafe_rpm + rotate_rpm;
-  int32_t rr = (int32_t)forward_rpm + strafe_rpm - rotate_rpm;
+  int32_t lf = (int32_t)forward_rpm + strafe_rpm - wz_ccw_rpm;
+  int32_t rf = (int32_t)forward_rpm - strafe_rpm + wz_ccw_rpm;
+  int32_t lr = (int32_t)forward_rpm - strafe_rpm - wz_ccw_rpm;
+  int32_t rr = (int32_t)forward_rpm + strafe_rpm + wz_ccw_rpm;
 
   Chassis_SetMotorRPMScaledEx(lf, rf, lr, rr, acc);
 }

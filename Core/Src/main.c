@@ -27,6 +27,7 @@
 #include "sensor_wit.h"
 #include "drive_emm.h"
 #include "advance_chassis.h"
+#include "advance_motion.h"
 #include "advance_world.h"
 #include "comm_pc.h"
 #include "car_pose.h"
@@ -40,7 +41,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define WORLD_ORIGIN_STATIC_WAIT_MS ((uint32_t)15000U)
+/* 原点未建立时的非阻塞重试间隔；OPS 有效前不会建立原点。 */
+#define WORLD_ORIGIN_RETRY_MS ((uint32_t)1000U)
+/* 发布固件保持 0，避免 printf 的逐字节阻塞影响控制周期。 */
+#define DEBUG_UART_ENABLE (0U)
 
 /* USER CODE END PD */
 
@@ -87,8 +91,12 @@ static void MX_USART6_UART_Init(void);
 int fputc(int ch, FILE *f)
 {
   (void)f;
+#if (DEBUG_UART_ENABLE != 0U)
   uint8_t byte = (uint8_t)ch;
-  HAL_UART_Transmit(&huart1, &byte, 1, HAL_MAX_DELAY);
+  (void)HAL_UART_Transmit(&huart1, &byte, 1, 20U);
+#else
+  (void)ch;
+#endif
   return ch;
 }
 
@@ -187,6 +195,17 @@ int main(void)
   OPS_Init(&huart5);
   WIT_Init();
 
+  /* 上层模块先绑定传感器数据视图，再初始化自身状态。 */
+  CarPose_Init();
+  AdvanceWorld_Init();
+  AdvanceMotion_Init();
+  (void)drive_emm_Init();
+  drive_emm_ConfigureChassisFeedback(
+      CHASSIS_MOTOR_LF_ID,
+      CHASSIS_MOTOR_RF_ID,
+      CHASSIS_MOTOR_LR_ID,
+      CHASSIS_MOTOR_RR_ID);
+
   // 外设初始化
   BusServo_Init(&huart4);
 
@@ -201,23 +220,8 @@ int main(void)
     printf("HostRx Jetson init failed\r\n");
   }
 
-  printf("USART1 printf ready\r\n");
-  HAL_Delay(100);
-
-  printf("OPS static init wait %lu ms\r\n", (unsigned long)WORLD_ORIGIN_STATIC_WAIT_MS);
-  HAL_Delay(WORLD_ORIGIN_STATIC_WAIT_MS);
-  if (AdvanceWorld_ResetOrigin() == ADVANCE_WORLD_STATUS_OK)
-  {
-    printf("AdvanceWorld origin ready\r\n");
-  }
-  else
-  {
-    printf("AdvanceWorld origin failed, keep polling OPS\r\n");
-  }
-
-  // 高级封装初始化
-  CarPose_Init();
-  AdvanceWorld_Init();
+  /* 不阻塞等待传感器；主循环在 OPS 有效后建立原点。 */
+  g_world_origin_retry_tick = HAL_GetTick() - WORLD_ORIGIN_RETRY_MS;
 
   // 测试函数
   // test();
@@ -232,17 +236,23 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     // BusServo_Poll();
+    drive_emm_Poll();
+    if ((Chassis_IsMotionCommandActive() != 0U) && (drive_emm_IsChassisFeedbackHealthy() == 0U))
+    {
+      AdvanceMotion_CancelIfActive();
+      Chassis_Stop();
+    }
     OPS_Poll();
     WIT_Poll();
     AdvanceWorld_Poll();
     if ((AdvanceWorld_GetPose()->origin_ready == 0U) &&
-        ((HAL_GetTick() - g_world_origin_retry_tick) >= 1000U))
+        ((HAL_GetTick() - g_world_origin_retry_tick) >= WORLD_ORIGIN_RETRY_MS))
     {
       g_world_origin_retry_tick = HAL_GetTick();
       (void)AdvanceWorld_ResetOrigin();
     }
-    AdvanceWorld_PrintDebug();
     HostRx_Poll();
+    AdvanceMotion_Poll();
     situation_led();
   }
   /* USER CODE END 3 */
@@ -572,6 +582,11 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     WIT_OnUartRxEvent(huart, Size);
   }
 
+  if (huart->Instance == USART3)
+  {
+    drive_emm_OnUartRxEvent(huart, Size);
+  }
+
   if (huart->Instance == USART1)
   {
     HostRx_OnUartRxEvent(huart, Size);
@@ -580,6 +595,19 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
   if (huart->Instance == USART6)
   {
     HostRx_OnUartRxEvent(huart, Size);
+  }
+
+  if (huart->Instance == USART3)
+  {
+    drive_emm_OnUartError(huart);
+  }
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart->Instance == USART3)
+  {
+    drive_emm_OnTxComplete(huart);
   }
 }
 
