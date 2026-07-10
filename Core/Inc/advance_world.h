@@ -9,6 +9,7 @@ extern "C"
 #include <stdint.h>
 
 #define ADVANCE_WORLD_DEBUG_PRINT_MS ((uint32_t)500U)
+#define ADVANCE_WORLD_DEBUG_ENABLE (0U)
 
 /*
  * world yaw 统一约定：俯视小车时，逆时针旋转为角度增大。
@@ -16,6 +17,18 @@ extern "C"
  */
 #define ADVANCE_WORLD_OPS_YAW_REVERSED ((uint8_t)0U)
 #define ADVANCE_WORLD_WIT_YAW_REVERSED ((uint8_t)0U)
+
+/*
+ * OPS 安装标定。先使用单轴低速测试确认轴向，再填写这些编译期配置。
+ * 偏移以车体旋转中心为原点，+X 向右、+Y 向前，单位为 mm。
+ */
+#define ADVANCE_WORLD_OPS_X_REVERSED ((uint8_t)0U)
+#define ADVANCE_WORLD_OPS_Y_REVERSED ((uint8_t)0U)
+#define ADVANCE_WORLD_OPS_XY_SWAPPED ((uint8_t)0U)
+#define ADVANCE_WORLD_OPS_YAW_OFFSET_DEG (0.0f)
+#define ADVANCE_WORLD_WIT_YAW_OFFSET_DEG (0.0f)
+#define ADVANCE_WORLD_OPS_OFFSET_X_MM (0.0f)
+#define ADVANCE_WORLD_OPS_OFFSET_Y_MM (0.0f)
 
   typedef enum
   {
@@ -31,6 +44,7 @@ extern "C"
     float y_mm;
     float yaw_deg;
     uint32_t updated_tick;
+    uint32_t yaw_updated_tick;
     uint8_t valid;
     uint8_t origin_ready;
   } WorldPose2D_t;

@@ -59,6 +59,19 @@ static int32_t Chassis_RoundFloatToI32(float value)
   return (value >= 0.0f) ? (int32_t)(value + 0.5f) : (int32_t)(value - 0.5f);
 }
 
+static float Chassis_LimitFloat(float value, float limit)
+{
+  if (value > limit)
+  {
+    return limit;
+  }
+  if (value < -limit)
+  {
+    return -limit;
+  }
+  return value;
+}
+
 static int16_t Chassis_ScaleOneRpm(int32_t rpm, int32_t max_abs)
 {
   if (max_abs <= (int32_t)CHASSIS_MAX_RPM)
@@ -192,9 +205,10 @@ void Chassis_SetBodyVelocity(float vx_right_mm_s, float vy_forward_mm_s, float w
 
 void Chassis_SetBodyVelocityEx(float vx_right_mm_s, float vy_forward_mm_s, float wz_ccw_deg_s, uint8_t acc)
 {
-  float vx = vx_right_mm_s * (float)CHASSIS_BODY_X_SIGN;
-  float vy = vy_forward_mm_s * (float)CHASSIS_BODY_Y_SIGN;
-  float wz_rad_s = wz_ccw_deg_s * (float)CHASSIS_BODY_WZ_SIGN * CHASSIS_PI / 180.0f;
+  float vx = Chassis_LimitFloat(vx_right_mm_s, CHASSIS_MAX_BODY_SPEED_MM_S) * (float)CHASSIS_BODY_X_SIGN;
+  float vy = Chassis_LimitFloat(vy_forward_mm_s, CHASSIS_MAX_BODY_SPEED_MM_S) * (float)CHASSIS_BODY_Y_SIGN;
+  float wz_rad_s = Chassis_LimitFloat(wz_ccw_deg_s, CHASSIS_MAX_BODY_WZ_DEG_S) *
+                   (float)CHASSIS_BODY_WZ_SIGN * CHASSIS_PI / 180.0f;
   float wheel_base = CHASSIS_HALF_LENGTH_MM + CHASSIS_HALF_WIDTH_MM;
   float rpm_per_mm_s = (60.0f * CHASSIS_MOTOR_GEAR_RATIO) / (2.0f * CHASSIS_PI * CHASSIS_WHEEL_RADIUS_MM);
   int32_t lf;
@@ -321,22 +335,22 @@ void Chassis_DifferentialTurnPreset(void)
   Chassis_DifferentialTurnEx(CHASSIS_DIFF_LEFT_PRESET_RPM, CHASSIS_DIFF_RIGHT_PRESET_RPM, CHASSIS_DIFF_PRESET_ACC);
 }
 
-void Chassis_MoveMecanum(int16_t forward_rpm, int16_t strafe_rpm, int16_t rotate_rpm)
+void Chassis_MoveMecanum(int16_t forward_rpm, int16_t strafe_rpm, int16_t wz_ccw_rpm)
 {
-  Chassis_MoveMecanumEx(forward_rpm, strafe_rpm, rotate_rpm, CHASSIS_DEFAULT_ACC);
+  Chassis_MoveMecanumEx(forward_rpm, strafe_rpm, wz_ccw_rpm, CHASSIS_DEFAULT_ACC);
 }
 
-void Chassis_MoveMecanumEx(int16_t forward_rpm, int16_t strafe_rpm, int16_t rotate_rpm, uint8_t acc)
+void Chassis_MoveMecanumEx(int16_t forward_rpm, int16_t strafe_rpm, int16_t wz_ccw_rpm, uint8_t acc)
 {
   /*
    * 麦克纳姆轮速度合成：
    * forward 控制前后，strafe 控制左右平移，rotate 控制原地转向。
    * 单个电机的方向修正统一在 Chassis_LoadMotorSpeed() 中处理。
    */
-  int32_t lf = (int32_t)forward_rpm + strafe_rpm + rotate_rpm;
-  int32_t rf = (int32_t)forward_rpm - strafe_rpm - rotate_rpm;
-  int32_t lr = (int32_t)forward_rpm - strafe_rpm + rotate_rpm;
-  int32_t rr = (int32_t)forward_rpm + strafe_rpm - rotate_rpm;
+  int32_t lf = (int32_t)forward_rpm + strafe_rpm - wz_ccw_rpm;
+  int32_t rf = (int32_t)forward_rpm - strafe_rpm + wz_ccw_rpm;
+  int32_t lr = (int32_t)forward_rpm - strafe_rpm - wz_ccw_rpm;
+  int32_t rr = (int32_t)forward_rpm + strafe_rpm + wz_ccw_rpm;
 
   Chassis_SetMotorRPMScaledEx(lf, rf, lr, rr, acc);
 }

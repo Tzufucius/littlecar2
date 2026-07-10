@@ -42,6 +42,13 @@ extern "C"
 #define CHASSIS_BODY_WZ_SIGN (1)
 
 /*
+ * 物理速度接口的输入限值。超出时底盘层会钳制，协议层应同时拒绝异常命令。
+ * 修改前应完成轮组方向、制动距离和场地边界验证。
+ */
+#define CHASSIS_MAX_BODY_SPEED_MM_S (500.0f)
+#define CHASSIS_MAX_BODY_WZ_DEG_S (180.0f)
+
+/*
  * Physical chassis parameters for mm/s and deg/s conversion.
  * Measure and calibrate these values on the real chassis before high-speed use.
  */
@@ -229,7 +236,7 @@ extern "C"
      * strafe_rpm：正数右平移，负数左平移。
      * rotate_rpm：正数右旋转，负数左旋转。
      */
-    void Chassis_MoveMecanum(int16_t forward_rpm, int16_t strafe_rpm, int16_t rotate_rpm);
+    void Chassis_MoveMecanum(int16_t forward_rpm, int16_t strafe_rpm, int16_t wz_ccw_rpm);
 
     /*
      * 通用麦克纳姆轮运动命令，并指定加速度。
@@ -239,7 +246,7 @@ extern "C"
      *   LR = forward - strafe + rotate
      *   RR = forward + strafe - rotate
      */
-    void Chassis_MoveMecanumEx(int16_t forward_rpm, int16_t strafe_rpm, int16_t rotate_rpm, uint8_t acc);
+    void Chassis_MoveMecanumEx(int16_t forward_rpm, int16_t strafe_rpm, int16_t wz_ccw_rpm, uint8_t acc);
 
     /*
      * 按 CHASSIS_MECANUM_*_PRESET_* 参数执行通用麦克纳姆轮运动。

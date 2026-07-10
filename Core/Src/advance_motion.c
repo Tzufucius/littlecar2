@@ -261,6 +261,12 @@ void AdvanceMotion_Poll(void)
   g_motion.position_error_mm = sqrtf((g_motion.error_x_mm * g_motion.error_x_mm) +
                                      (g_motion.error_y_mm * g_motion.error_y_mm));
   yaw_required = ((g_motion.goal.goal_flags & ADVANCE_MOTION_GOAL_USE_YAW) != 0U) ? 1U : 0U;
+  if ((yaw_required != 0U) &&
+      ((now_tick - g_motion.pose.yaw_updated_tick) > ADVANCE_MOTION_YAW_TIMEOUT_MS))
+  {
+    AdvanceMotion_SetTerminalState(ADVANCE_MOTION_STATE_NO_POSE, g_motion.acc);
+    return;
+  }
   g_motion.yaw_error_deg = yaw_required ? AdvanceWorld_WrapAngleDeg(g_motion.goal.yaw_deg - g_motion.pose.yaw_deg) : 0.0f;
 
   if ((g_motion.position_error_mm <= ADVANCE_MOTION_POS_TOLERANCE_MM) &&
