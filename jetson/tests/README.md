@@ -5,6 +5,7 @@
 - `test_protocol_frame.py`：离线单元测试，覆盖帧编码、CRC、ACK 解析和字节流解析。
 - `test_protocol_client.py`：内存串口仿真测试，覆盖当前 STM32 已实现的 SYSTEM、SAFETY 和全部 CHASSIS 高层方法及其 Payload。
 - `test_protocol_hardware.py`：实车串口联调测试，默认跳过，供上板后验证 ACK 和查询响应。
+- `test_app_actions.py`：动作函数的组合顺序、转向方向和异常停车测试。
 
 运行方式：
 
