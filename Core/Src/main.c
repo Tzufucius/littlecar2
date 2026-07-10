@@ -30,6 +30,7 @@
 #include "advance_motion.h"
 #include "advance_world.h"
 #include "comm_pc.h"
+#include "comm_protocol.h"
 #include "car_pose.h"
 
 /* USER CODE END Includes */
@@ -45,6 +46,15 @@
 #define WORLD_ORIGIN_RETRY_MS ((uint32_t)1000U)
 /* 发布固件保持 0，避免 printf 的逐字节阻塞影响控制周期。 */
 #define DEBUG_UART_ENABLE (0U)
+
+/* TIM6 仅置位这些任务，不在中断上下文执行业务逻辑。 */
+#define APP_TASK_PROTOCOL ((uint32_t)0x00000001U)
+#define APP_TASK_WORLD ((uint32_t)0x00000002U)
+#define APP_TASK_SAFETY ((uint32_t)0x00000004U)
+#define APP_TASK_MOTION ((uint32_t)0x00000008U)
+#define APP_TASK_MOTOR ((uint32_t)0x00000010U)
+#define APP_TASK_ORIGIN ((uint32_t)0x00000020U)
+#define APP_TASK_LED ((uint32_t)0x00000040U)
 
 /* USER CODE END PD */
 
@@ -70,8 +80,7 @@ DMA_HandleTypeDef hdma_usart6_rx;
 DMA_HandleTypeDef hdma_usart6_tx;
 
 /* USER CODE BEGIN PV */
-// static uint32_t g_wit_print_tick = 0U;
-static uint32_t g_world_origin_retry_tick = 0U;
+static volatile uint32_t g_app_pending_tasks = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -154,6 +163,75 @@ void test() // 测试的东西全写在里面
   testEmmV5Datou(CHASSIS_MOTOR_RR_ID);
 }
 
+static uint32_t App_TakePendingTasks(void)
+{
+  uint32_t pending;
+
+  __disable_irq();
+  pending = g_app_pending_tasks;
+  g_app_pending_tasks = 0U;
+  __enable_irq();
+  return pending;
+}
+
+static void App_TryResetWorldOrigin(void)
+{
+  if (AdvanceWorld_GetPose()->origin_ready == 0U)
+  {
+    (void)AdvanceWorld_ResetOrigin();
+  }
+}
+
+static void App_SafetyCheck(void)
+{
+  if ((Chassis_IsMotionCommandActive() != 0U) &&
+      (drive_emm_IsChassisFeedbackHealthy() == 0U))
+  {
+    AdvanceMotion_CancelIfActive();
+    Chassis_Stop();
+  }
+}
+
+static void App_RunScheduledTasks(uint32_t pending)
+{
+  if ((pending & APP_TASK_PROTOCOL) != 0U)
+  {
+    HostRx_Poll();
+  }
+
+  if ((pending & APP_TASK_WORLD) != 0U)
+  {
+    OPS_Poll();
+    WIT_Poll();
+    AdvanceWorld_Poll();
+  }
+
+  if ((pending & APP_TASK_MOTOR) != 0U)
+  {
+    drive_emm_Poll();
+  }
+
+  if ((pending & APP_TASK_ORIGIN) != 0U)
+  {
+    App_TryResetWorldOrigin();
+  }
+
+  if ((pending & APP_TASK_SAFETY) != 0U)
+  {
+    App_SafetyCheck();
+  }
+
+  if ((pending & APP_TASK_MOTION) != 0U)
+  {
+    AdvanceMotion_Poll();
+  }
+
+  if ((pending & APP_TASK_LED) != 0U)
+  {
+    situation_led();
+  }
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -224,8 +302,11 @@ int main(void)
     printf("HostRx Jetson init failed\r\n");
   }
 
-  /* 不阻塞等待传感器；主循环在 OPS 有效后建立原点。 */
-  g_world_origin_retry_tick = HAL_GetTick() - WORLD_ORIGIN_RETRY_MS;
+  /* 原点建立由 1 s 调度任务重试，不阻塞等待 OPS 数据。 */
+  if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
   // 测试函数
   // test();
@@ -239,25 +320,15 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    // BusServo_Poll();
-    drive_emm_Poll();
-    if ((Chassis_IsMotionCommandActive() != 0U) && (drive_emm_IsChassisFeedbackHealthy() == 0U))
+    uint32_t pending = App_TakePendingTasks();
+    if (pending == 0U)
     {
-      AdvanceMotion_CancelIfActive();
-      Chassis_Stop();
+      __WFI();
     }
-    OPS_Poll();
-    WIT_Poll();
-    AdvanceWorld_Poll();
-    if ((AdvanceWorld_GetPose()->origin_ready == 0U) &&
-        ((HAL_GetTick() - g_world_origin_retry_tick) >= WORLD_ORIGIN_RETRY_MS))
+    else
     {
-      g_world_origin_retry_tick = HAL_GetTick();
-      (void)AdvanceWorld_ResetOrigin();
+      App_RunScheduledTasks(pending);
     }
-    HostRx_Poll();
-    AdvanceMotion_Poll();
-    situation_led();
   }
   /* USER CODE END 3 */
 }
@@ -647,10 +718,6 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     HostRx_OnUartRxEvent(huart, Size);
   }
 
-  if (huart->Instance == USART3)
-  {
-    drive_emm_OnUartError(huart);
-  }
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
@@ -659,10 +726,25 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
   {
     drive_emm_OnTxComplete(huart);
   }
+
+  if ((huart->Instance == USART1) || (huart->Instance == USART6))
+  {
+    HostProtocol_OnUartTxComplete(huart);
+  }
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
+  if (huart->Instance == USART3)
+  {
+    drive_emm_OnUartError(huart);
+  }
+
+  if ((huart->Instance == USART1) || (huart->Instance == USART6))
+  {
+    HostProtocol_OnUartError(huart);
+  }
+
   if (huart->Instance == UART4)
   {
     BusServo_OnUartError();
@@ -686,6 +768,58 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
   if (huart->Instance == USART1)
   {
     HostRx_OnUartError(huart);
+  }
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  static uint16_t protocol_tick = 0U;
+  static uint16_t world_tick = 0U;
+  static uint16_t safety_tick = 0U;
+  static uint16_t motion_tick = 0U;
+  static uint16_t motor_tick = 0U;
+  static uint16_t origin_tick = 0U;
+  static uint16_t led_tick = 0U;
+
+  if (htim->Instance != TIM6)
+  {
+    return;
+  }
+
+  if (++protocol_tick >= 2U)
+  {
+    protocol_tick = 0U;
+    g_app_pending_tasks |= APP_TASK_PROTOCOL;
+  }
+  if (++world_tick >= 10U)
+  {
+    world_tick = 0U;
+    g_app_pending_tasks |= APP_TASK_WORLD;
+  }
+  if (++safety_tick >= 10U)
+  {
+    safety_tick = 0U;
+    g_app_pending_tasks |= APP_TASK_SAFETY;
+  }
+  if (++motion_tick >= 20U)
+  {
+    motion_tick = 0U;
+    g_app_pending_tasks |= APP_TASK_MOTION;
+  }
+  if (++motor_tick >= 20U)
+  {
+    motor_tick = 0U;
+    g_app_pending_tasks |= APP_TASK_MOTOR;
+  }
+  if (++origin_tick >= WORLD_ORIGIN_RETRY_MS)
+  {
+    origin_tick = 0U;
+    g_app_pending_tasks |= APP_TASK_ORIGIN;
+  }
+  if (++led_tick >= 500U)
+  {
+    led_tick = 0U;
+    g_app_pending_tasks |= APP_TASK_LED;
   }
 }
 

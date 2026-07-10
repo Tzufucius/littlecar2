@@ -51,6 +51,9 @@ extern "C"
    * - 回发 ACK。
    */
   void HostProtocol_Poll(void);
+  /* UART TX 完成与错误回调入口，用于释放协议异步发送队列。 */
+  void HostProtocol_OnUartTxComplete(UART_HandleTypeDef *huart);
+  void HostProtocol_OnUartError(UART_HandleTypeDef *huart);
 
   HostProtocol_Status_t HostProtocol_GetLastStatus(void);
 

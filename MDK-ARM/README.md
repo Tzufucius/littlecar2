@@ -203,17 +203,18 @@
 | `0x08` | `CHASSIS_CANCEL_GOAL` | 0 | 取消当前目标并平滑停车 |
 | `0x0B` | `CHASSIS_GET_MOTION_STATUS` | 0 | ACK 后返回 `MSG_DATA` 状态包 |
 
-当前实现不修改 `main.c` 测试逻辑，只提供 `AdvanceMotion_Poll()` 调度入口。坐标系、速度变换、GotoPose 运算逻辑和协议字段详见 `docs/坐标系与GotoPose使用说明.md` 与 `docs/上下位机通信协议.md`。
+当前 `main.c` 通过 TIM6 任务标志调度 `AdvanceMotion_Poll()`，并在无待处理任务时执行 `__WFI()`。坐标系、速度变换、GotoPose 运算逻辑和协议字段详见 `docs/坐标系与GotoPose使用说明.md` 与 `docs/上下位机通信协议.md`。
 
 ## 9. 闭环、安全与通信保护
 
-主循环已经按以下顺序运行：电机通信轮询、OPS/WIT 轮询、world 位姿更新、上位机协议处理、`AdvanceMotion_Poll()`。系统不再使用启动阶段的固定延时等待传感器，而是在 OPS 位姿有效后自动建立 world 原点。
+TIM6 以 1 ms 周期仅置位调度标志；主循环由 `__WFI()` 唤醒后依次执行协议、电机通信、OPS/WIT、world 位姿、安全检查与 `AdvanceMotion_Poll()`。系统不再使用启动阶段的固定延时等待传感器，而是在 OPS 位姿有效后自动建立 world 原点。
 
 - `GotoPose` 在进入位置和角度容差时立即下发零速度，连续稳定 `ADVANCE_MOTION_ARRIVE_HOLD_MS` 后才进入 `ARRIVED`。
 - 急停、心跳超时、普通停止、取消目标和禁用底盘都会先取消活动的 `GotoPose`，避免状态机在下一周期重新输出速度。
 - RPM、麦轮、车体速度、世界速度和 `GotoPose` 使用互斥控制权；新运动命令会取消正在运行的目标点控制。
 - USART3 已使用 DMA 发送队列和 DMA/IDLE 接收。`drive_emm_Poll()` 会轮询四个底盘电机的速度、位置、位置误差和状态位；运动期间任一反馈超时、堵转、掉电标志或发送错误均会停车。
 - 驱动器心跳保护默认写为 `500 ms`，配置见 `drive_emm.h`。首次上板必须确认实际 Emm 固件支持该参数，且周期反馈查询会被驱动器视为有效心跳。
+- ACK 与状态数据使用 UART 中断发送队列；UART/DMA 回调仅负责接收、入队或释放发送槽位，不直接执行业务控制。
 
 关键配置及实车验证步骤见：
 
