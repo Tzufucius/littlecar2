@@ -1,5 +1,7 @@
 #include "sensor_ops.h"
 
+#include <math.h>
+
 #define OPS_FRAME_HEADER_FIRST ((uint8_t)0x0DU)
 #define OPS_FRAME_HEADER_SECOND ((uint8_t)0x0AU)
 #define OPS_FRAME_FOOTER_FIRST ((uint8_t)0x0AU)
@@ -31,6 +33,35 @@ static OPS_Pose_t g_ops_pose = {0};
 static OPS_Status_t g_ops_last_status = OPS_STATUS_NOT_READY;
 static uint8_t g_ops_initialized = 0U;
 
+static uint8_t OPS_IsPosePlausible(void)
+{
+  float x = g_ops_payload.values[3];
+  float y = g_ops_payload.values[4];
+
+  if ((isfinite(g_ops_payload.values[0]) == 0) ||
+      (isfinite(g_ops_payload.values[1]) == 0) ||
+      (isfinite(g_ops_payload.values[2]) == 0) ||
+      (isfinite(x) == 0) || (isfinite(y) == 0) ||
+      (isfinite(g_ops_payload.values[5]) == 0) ||
+      (fabsf(x) > OPS_MAX_ABS_POSITION_MM) ||
+      (fabsf(y) > OPS_MAX_ABS_POSITION_MM) ||
+      (fabsf(g_ops_payload.values[0]) > OPS_MAX_ABS_ANGLE_DEG) ||
+      (fabsf(g_ops_payload.values[1]) > OPS_MAX_ABS_ANGLE_DEG) ||
+      (fabsf(g_ops_payload.values[2]) > OPS_MAX_ABS_ANGLE_DEG) ||
+      (fabsf(g_ops_payload.values[5]) > OPS_MAX_ABS_WZ_DPS))
+  {
+    return 0U;
+  }
+
+  if ((g_ops_pose.valid != 0U) &&
+      ((fabsf(x - g_ops_pose.pos_x_mm) > OPS_MAX_POSITION_JUMP_MM) ||
+       (fabsf(y - g_ops_pose.pos_y_mm) > OPS_MAX_POSITION_JUMP_MM)))
+  {
+    return 0U;
+  }
+  return 1U;
+}
+
 /**
  * @brief 重置解析器状态
  * @details 当发生帧错误、丢包或完成一帧接收后，调用此函数将状态机归位。
@@ -61,6 +92,12 @@ static void OPS_CopyPose(OPS_Pose_t *pose)
  */
 static void OPS_UpdatePose(void)
 {
+  if (OPS_IsPosePlausible() == 0U)
+  {
+    g_ops_last_status = OPS_STATUS_FRAME_ERROR;
+    return;
+  }
+
   __disable_irq();
 
   g_ops_pose.zangle_deg = g_ops_payload.values[0];

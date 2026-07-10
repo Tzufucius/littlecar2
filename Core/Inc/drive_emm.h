@@ -52,6 +52,39 @@ typedef enum
 #define MMCL_LEN 512
 extern __IO uint16_t MMCL_count, MMCL_cmd[MMCL_LEN];
 
+/* USART3 发送队列与反馈监督配置。数值需与电机回包速率一起实车验证。 */
+#define DRIVE_EMM_TX_QUEUE_DEPTH ((uint8_t)8U)
+#define DRIVE_EMM_TX_TIMEOUT_MS ((uint32_t)100U)
+#define DRIVE_EMM_FEEDBACK_PERIOD_MS ((uint32_t)20U)
+#define DRIVE_EMM_FEEDBACK_TIMEOUT_MS ((uint32_t)500U)
+#define DRIVE_EMM_FEEDBACK_STARTUP_GRACE_MS ((uint32_t)1000U)
+#define DRIVE_EMM_ENABLE_HEARTBEAT_PROTECTION (1U)
+#define DRIVE_EMM_HEARTBEAT_PROTECT_MS ((uint32_t)500U)
+
+typedef struct
+{
+  int16_t speed_rpm;
+  int32_t position;
+  int32_t position_error;
+  uint8_t enabled;
+  uint8_t stalled;
+  uint8_t fault;
+  uint8_t valid;
+  uint32_t updated_tick;
+} DriveEmm_MotorFeedback_t;
+
+/* 初始化 USART3 DMA 接收、发送队列和轮询反馈。 */
+HAL_StatusTypeDef drive_emm_Init(void);
+/* 配置需要接受反馈监督的四个底盘电机 ID。 */
+void drive_emm_ConfigureChassisFeedback(uint8_t lf_id, uint8_t rf_id, uint8_t lr_id, uint8_t rr_id);
+/* 主循环轮询：推进 DMA 队列、查询四电机反馈并检测发送超时。 */
+void drive_emm_Poll(void);
+void drive_emm_OnUartRxEvent(UART_HandleTypeDef *huart, uint16_t size);
+void drive_emm_OnTxComplete(UART_HandleTypeDef *huart);
+void drive_emm_OnUartError(UART_HandleTypeDef *huart);
+uint8_t drive_emm_IsChassisFeedbackHealthy(void);
+HAL_StatusTypeDef drive_emm_GetMotorFeedback(uint8_t id, DriveEmm_MotorFeedback_t *feedback);
+
 /**
 ***********************************************************
 ***********************************************************
