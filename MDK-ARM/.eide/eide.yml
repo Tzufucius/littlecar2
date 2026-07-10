@@ -45,7 +45,6 @@ virtualFolder:
                 - path: ../Core/Inc/comm_protocol.h
                 - path: ../Core/Inc/drive_bus_servo.h
                 - path: ../Core/Inc/drive_emm.h
-                - path: ../Core/Inc/main.h
                 - path: ../Core/Inc/sensor_ops.h
                 - path: ../Core/Inc/sensor_wit.h
                 - path: ../Core/Inc/stm32f4xx_hal_conf.h
@@ -130,15 +129,15 @@ targets:
             - id: 1
               isChecked: false
               mem:
-                size: "0x00100000"
-                startAddr: "0x68000000"
+                size: "0x0"
+                startAddr: "0x0"
               noInit: false
               tag: RAM
             - id: 2
               isChecked: false
               mem:
-                size: "0x00010000"
-                startAddr: "0x10000000"
+                size: "0x0"
+                startAddr: "0x0"
               noInit: false
               tag: RAM
             - id: 3
