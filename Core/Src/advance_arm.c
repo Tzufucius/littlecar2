@@ -1,43 +1,73 @@
 #include "advance_arm.h"
 
-/*id
-- 步进电机
-    - 5 控制丝杆上下运动
-    - 6 控制机械臂前后平移
-- 舵机
-    - 1 物机械臂旋转
-    - 2 机械臂抓取
-    - 3 料盘旋转
- */
+#include "drive_emm.h"
 
-/* 功能配置
-- 物料盘旋转到指定颜色（舵机3）
-- 整体机械臂旋转（舵机1）
-- 丝杆（步进电机5）
-    - 上升
-    - 下降
-- 夹爪（舵机2）
-    - 抓取
-    - 松开
-- 臂（步进电机6）
-    - 前移
-    - 后移
-
-# define CHASSIS_MOTOR_ARM_LIFT_ID 5U
-# define CHASSIS_MOTOR_ARM_SWING_ID 6U
-# define CHASSIS_SERVO_ARM_ROTATE_ID 1U
-# define CHASSIS_SERVO_ARM_GRAB_ID 2U
-# define CHASSIS_SERVO_ARM_PLATE_ID 3U
-
-*/
-
-/*
- * 夹爪动作只归属 advance_arm；上位机无需知道总线舵机 ID 或标定位置。
- * closed: 0 松开，1 夹取。
- */
-BusServo_Status_t AdvanceArm_Grab(uint8_t closed)
+static AdvanceArm_Status_t AdvanceArm_MoveStepper(uint8_t motor_id,
+                                                  AdvanceArm_MotorDirection_t direction,
+                                                  uint16_t velocity, uint8_t acceleration,
+                                                  uint32_t pulse_count, bool relative,
+                                                  bool synchronous)
 {
-    int32_t position = (closed != 0U) ? ADVANCE_ARM_GRAB_CLOSE_POSITION : ADVANCE_ARM_GRAB_RELEASE_POSITION;
+  if ((motor_id == 0U) ||
+      ((direction != ADVANCE_ARM_MOTOR_DIRECTION_FORWARD) &&
+       (direction != ADVANCE_ARM_MOTOR_DIRECTION_REVERSE)))
+  {
+    return ADVANCE_ARM_STATUS_INVALID_PARAM;
+  }
 
-    return BusServo_SetPositionEx(CHASSIS_SERVO_ARM_GRAB_ID, 0U, position, 0U);
+  drive_emm_Pos_Control(motor_id, (uint8_t)direction, velocity, acceleration,
+                        pulse_count, relative, synchronous);
+  return ADVANCE_ARM_STATUS_OK;
+}
+
+BusServo_Status_t AdvanceArm_RotatePlate(uint8_t servo_id, uint16_t acceleration,
+                                         int32_t position, uint16_t speed)
+{
+  return BusServo_SetPositionEx(servo_id, acceleration, position, speed);
+}
+
+BusServo_Status_t AdvanceArm_RotateBase(uint8_t servo_id, uint16_t acceleration,
+                                        int32_t position, uint16_t speed)
+{
+  return BusServo_SetPositionEx(servo_id, acceleration, position, speed);
+}
+
+BusServo_Status_t AdvanceArm_Grab(uint8_t servo_id, bool closed,
+                                  int32_t release_position, int32_t close_position,
+                                  uint16_t acceleration, uint16_t speed)
+{
+  int32_t position = closed ? close_position : release_position;
+
+  return BusServo_SetPositionEx(servo_id, acceleration, position, speed);
+}
+
+AdvanceArm_Status_t AdvanceArm_MoveLift(uint8_t motor_id,
+                                        AdvanceArm_MotorDirection_t direction,
+                                        uint16_t velocity, uint8_t acceleration,
+                                        uint32_t pulse_count, bool relative,
+                                        bool synchronous)
+{
+  return AdvanceArm_MoveStepper(motor_id, direction, velocity, acceleration,
+                                pulse_count, relative, synchronous);
+}
+
+AdvanceArm_Status_t AdvanceArm_MoveSwing(uint8_t motor_id,
+                                         AdvanceArm_MotorDirection_t direction,
+                                         uint16_t velocity, uint8_t acceleration,
+                                         uint32_t pulse_count, bool relative,
+                                         bool synchronous)
+{
+  return AdvanceArm_MoveStepper(motor_id, direction, velocity, acceleration,
+                                pulse_count, relative, synchronous);
+}
+
+AdvanceArm_Status_t AdvanceArm_StopMotor(uint8_t motor_id, bool synchronous)
+{
+  if (motor_id == 0U)
+  {
+    return ADVANCE_ARM_STATUS_INVALID_PARAM;
+  }
+
+  drive_emm_Stop_Now(motor_id, synchronous);
+  return ADVANCE_ARM_STATUS_OK;
 }

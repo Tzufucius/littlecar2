@@ -20,7 +20,8 @@ extern "C"
   {
     comm_protocol_STATUS_OK = 0,
     comm_protocol_STATUS_INVALID_PARAM,
-    comm_protocol_STATUS_OVERFLOW
+    comm_protocol_STATUS_OVERFLOW,
+    comm_protocol_STATUS_TX_TIMEOUT
   } HostProtocol_Status_t;
 
   /*
@@ -56,6 +57,7 @@ extern "C"
   void HostProtocol_OnUartError(UART_HandleTypeDef *huart);
 
   HostProtocol_Status_t HostProtocol_GetLastStatus(void);
+  uint32_t HostProtocol_GetTxTimeoutCount(void);
 
 #ifdef __cplusplus
 }

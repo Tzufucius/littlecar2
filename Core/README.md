@@ -26,6 +26,7 @@
 - `advance_chassis`：基于 `drive_emm` 的麦克纳姆底盘高级运动接口。
 - `advance_world`：维护 world 坐标系、全局位姿和 world/base 速度变换。
 - `advance_motion`：世界速度与 `GotoPose` 异步状态机；由 `main.c` 周期调用并受协议层控制权仲裁保护。
+- `advance_arm`：机械臂的物料盘、旋转、夹爪、丝杆和前后平移动作封装；所有设备 ID 与运动参数由调用方传入。
 
 ## 闭环安全边界
 
