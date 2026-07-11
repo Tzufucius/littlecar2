@@ -14,3 +14,4 @@
 - `comm_protocol.h`：上位机二进制协议解析接口。
 - `advance_chassis.h`：麦克纳姆底盘高级运动接口。
 - `advance_world.h`：全局坐标系、world 位姿和坐标变换接口。
+- `advance_arm.h`：机械臂舵机与步进电机动作接口，调用方显式提供设备 ID 和运动参数。

@@ -1,30 +1,67 @@
 #ifndef __ADVANCE_ARM_H__
 #define __ADVANCE_ARM_H__
 
-#include "drive_bus_servo.h"
-#include "drive_emm.h"
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+#include <stdbool.h>
 #include <stdint.h>
 
+#include "drive_bus_servo.h"
+
+/* Emm 位置模式的方向位：0 为正向，1 为反向。实际机构方向由调用方传入。 */
+typedef enum
+{
+  ADVANCE_ARM_MOTOR_DIRECTION_FORWARD = 0U,
+  ADVANCE_ARM_MOTOR_DIRECTION_REVERSE = 1U
+} AdvanceArm_MotorDirection_t;
+
+typedef enum
+{
+  ADVANCE_ARM_STATUS_OK = 0,
+  ADVANCE_ARM_STATUS_INVALID_PARAM
+} AdvanceArm_Status_t;
+
 /*
-- 步进电机
-    - 5 控制丝杆上下运动
-    - 6 控制机械臂前后平移
-- 舵机
-    - 1 物机械臂旋转
-    - 2 机械臂抓取
-    - 3 料盘旋转
+ * 物料盘（舵机）、机械臂旋转（舵机）、夹爪（舵机）均使用位置控制。
+ * servo_id、加速度、目标位置和速度均由调用方传入，便于按实车标定。
  */
-# define CHASSIS_MOTOR_ARM_LIFT_ID 5U
-# define CHASSIS_MOTOR_ARM_SWING_ID 6U
-# define CHASSIS_SERVO_ARM_ROTATE_ID 1U
-# define CHASSIS_SERVO_ARM_GRAB_ID 2U
-# define CHASSIS_SERVO_ARM_PLATE_ID 3U
+BusServo_Status_t AdvanceArm_RotatePlate(uint8_t servo_id, uint16_t acceleration,
+                                         int32_t position, uint16_t speed);
+BusServo_Status_t AdvanceArm_RotateBase(uint8_t servo_id, uint16_t acceleration,
+                                        int32_t position, uint16_t speed);
 
-/* 夹爪开合位置集中在下位机，实车标定后只修改这两个宏。 */
-#define ADVANCE_ARM_GRAB_RELEASE_POSITION ((int32_t)0)
-#define ADVANCE_ARM_GRAB_CLOSE_POSITION ((int32_t)1000)
+/*
+ * closed 为 false 时使用 release_position，为 true 时使用 close_position。
+ * 两个位置均为形参，避免在模块内固化夹爪的开合标定值。
+ */
+BusServo_Status_t AdvanceArm_Grab(uint8_t servo_id, bool closed,
+                                  int32_t release_position, int32_t close_position,
+                                  uint16_t acceleration, uint16_t speed);
 
-/* 上位机协议层只开放夹爪开合；其他机械臂能力后续单独设计命令。 */
-BusServo_Status_t AdvanceArm_Grab(uint8_t closed);
+/*
+ * 丝杆和前后平移机构均使用 Emm 位置模式。
+ * pulse_count 是目标脉冲数；relative 为 true 时按相对位移执行；
+ * synchronous 为 true 时仅装入多机同步命令缓存，需由调用方触发同步执行。
+ */
+AdvanceArm_Status_t AdvanceArm_MoveLift(uint8_t motor_id,
+                                        AdvanceArm_MotorDirection_t direction,
+                                        uint16_t velocity, uint8_t acceleration,
+                                        uint32_t pulse_count, bool relative,
+                                        bool synchronous);
+AdvanceArm_Status_t AdvanceArm_MoveSwing(uint8_t motor_id,
+                                         AdvanceArm_MotorDirection_t direction,
+                                         uint16_t velocity, uint8_t acceleration,
+                                         uint32_t pulse_count, bool relative,
+                                         bool synchronous);
+
+/* 立即停止指定步进电机；synchronous 的含义与 AdvanceArm_MoveLift 相同。 */
+AdvanceArm_Status_t AdvanceArm_StopMotor(uint8_t motor_id, bool synchronous);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -15,3 +15,4 @@
 - `comm_protocol.c`：上位机二进制协议找帧、CRC 校验、命令分发和 ACK 回发。
 - `advance_chassis.c`：基于 `drive_emm` 多电机命令实现底盘前进、后退、平移、旋转和差速转向。
 - `advance_world.c`：基于 OPS 原始位姿维护工程 world 坐标系，并提供 world/base 坐标变换。
+- `advance_arm.c`：物料盘、机械臂旋转、夹爪、丝杆和前后平移动作实现。

@@ -919,8 +919,11 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
   switch (frame->cmd_id)
   {
   case 0x10U:
-    /* ARM_GRAB：Payload[0] = 0 松开，1 夹取。 */
-    if (frame->payload_len != 1U)
+    /*
+     * ARM_GRAB：所有与实车标定相关的参数由命令携带，避免 advance_arm
+     * 内部固化舵机 ID、开合位置、加速度和速度。
+     */
+    if (frame->payload_len != 14U)
     {
       return ACK_BAD_LENGTH;
     }
@@ -928,7 +931,11 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
     {
       return ACK_BAD_PARAM;
     }
-    status = AdvanceArm_Grab(frame->payload[0]);
+    status = AdvanceArm_Grab(frame->payload[1], frame->payload[0] != 0U,
+                             HostProtocol_ReadI32(&frame->payload[2]),
+                             HostProtocol_ReadI32(&frame->payload[6]),
+                             HostProtocol_ReadU16(&frame->payload[10]),
+                             HostProtocol_ReadU16(&frame->payload[12]));
     return (status == drive_bus_servo_STATUS_OK) ? ACK_OK : ACK_FAULT;
 
   default:
