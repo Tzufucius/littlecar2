@@ -30,7 +30,9 @@
 #define comm_protocol_MAX_PAYLOAD ((uint16_t)255U)
 #define comm_protocol_MAX_FRAME_LEN (comm_protocol_HEADER_LEN + comm_protocol_MAX_PAYLOAD + comm_protocol_CRC_LEN)
 #define comm_protocol_QUEUE_SIZE ((uint8_t)4U)
-#define comm_protocol_TX_TIMEOUT_MS ((uint32_t)20U)
+#define comm_protocol_TX_BITS_PER_BYTE ((uint32_t)10U)
+#define comm_protocol_TX_TIMEOUT_GUARD_MS ((uint32_t)5U)
+#define comm_protocol_TX_MAX_RETRIES ((uint8_t)1U)
 #define comm_protocol_HEARTBEAT_MS ((uint32_t)300U)
 #define comm_protocol_TX_QUEUE_SIZE ((uint8_t)8U)
 
@@ -93,6 +95,7 @@ typedef struct
 {
   UART_HandleTypeDef *huart;
   uint16_t length;
+  uint8_t retry_count;
   uint8_t data[comm_protocol_MAX_FRAME_LEN];
 } HostProtocol_TxItem_t;
 
@@ -113,6 +116,8 @@ static volatile uint8_t g_tx_head = 0U;
 static volatile uint8_t g_tx_tail = 0U;
 static volatile uint8_t g_tx_count = 0U;
 static volatile uint8_t g_tx_active = 0U;
+static volatile uint32_t g_tx_started_tick = 0U;
+static volatile uint32_t g_tx_timeout_count = 0U;
 
 typedef enum
 {
@@ -148,6 +153,23 @@ static void HostProtocol_SelectMotionMode(HostProtocol_ControlMode_t mode)
   g_control_mode = (uint8_t)mode;
 }
 
+static uint32_t HostProtocol_GetTxTimeoutMs(const HostProtocol_TxItem_t *item)
+{
+  uint32_t baud_rate;
+  uint32_t transmit_ms;
+
+  if ((item == NULL) || (item->huart == NULL) || (item->huart->Init.BaudRate == 0U))
+  {
+    return comm_protocol_TX_TIMEOUT_GUARD_MS;
+  }
+
+  baud_rate = item->huart->Init.BaudRate;
+  transmit_ms = (((uint32_t)item->length * comm_protocol_TX_BITS_PER_BYTE * 1000U) +
+                 baud_rate - 1U) /
+                baud_rate;
+  return transmit_ms + comm_protocol_TX_TIMEOUT_GUARD_MS;
+}
+
 static void HostProtocol_StartNextTx(void)
 {
   HAL_StatusTypeDef status;
@@ -161,11 +183,55 @@ static void HostProtocol_StartNextTx(void)
   status = HAL_UART_Transmit_IT(g_tx_queue[g_tx_tail].huart,
                                 g_tx_queue[g_tx_tail].data,
                                 g_tx_queue[g_tx_tail].length);
-  if (status != HAL_OK)
+  if (status == HAL_OK)
+  {
+    g_tx_started_tick = HAL_GetTick();
+  }
+  else
   {
     g_tx_active = 0U;
     g_last_status = comm_protocol_STATUS_OVERFLOW;
   }
+}
+
+static void HostProtocol_RecoverTxTimeout(void)
+{
+  HostProtocol_TxItem_t *item;
+  uint32_t now;
+
+  now = HAL_GetTick();
+  __disable_irq();
+  if ((g_tx_active == 0U) || (g_tx_count == 0U))
+  {
+    __enable_irq();
+    return;
+  }
+
+  item = &g_tx_queue[g_tx_tail];
+  if ((now - g_tx_started_tick) <= HostProtocol_GetTxTimeoutMs(item))
+  {
+    __enable_irq();
+    return;
+  }
+
+  /* 当前发送使用中断模式，AbortTransmit 会停止 TX 中断并恢复 UART READY 状态。 */
+  (void)HAL_UART_AbortTransmit(item->huart);
+  ++g_tx_timeout_count;
+  g_last_status = comm_protocol_STATUS_TX_TIMEOUT;
+  g_tx_active = 0U;
+  g_tx_started_tick = 0U;
+  if (item->retry_count < comm_protocol_TX_MAX_RETRIES)
+  {
+    ++item->retry_count;
+  }
+  else
+  {
+    g_tx_tail = (uint8_t)((g_tx_tail + 1U) % comm_protocol_TX_QUEUE_SIZE);
+    --g_tx_count;
+  }
+  __enable_irq();
+
+  HostProtocol_StartNextTx();
 }
 
 static void HostProtocol_QueueTx(UART_HandleTypeDef *huart, const uint8_t *data, uint16_t length)
@@ -189,6 +255,7 @@ static void HostProtocol_QueueTx(UART_HandleTypeDef *huart, const uint8_t *data,
   slot = g_tx_head;
   g_tx_queue[slot].huart = huart;
   g_tx_queue[slot].length = length;
+  g_tx_queue[slot].retry_count = 0U;
   memcpy(g_tx_queue[slot].data, data, length);
   g_tx_head = (uint8_t)((slot + 1U) % comm_protocol_TX_QUEUE_SIZE);
   ++g_tx_count;
@@ -1008,6 +1075,7 @@ void HostProtocol_Poll(void)
   HostProtocol_Frame_t frame;
   HostProtocol_AckResult_t result;
 
+  HostProtocol_RecoverTxTimeout();
   /* UART 暂忙或错误恢复后，在下一协议周期重试队首帧。 */
   HostProtocol_StartNextTx();
   HostProtocol_CheckHeartbeatTimeout();
@@ -1039,6 +1107,7 @@ void HostProtocol_OnUartTxComplete(UART_HandleTypeDef *huart)
   g_tx_tail = (uint8_t)((g_tx_tail + 1U) % comm_protocol_TX_QUEUE_SIZE);
   --g_tx_count;
   g_tx_active = 0U;
+  g_tx_started_tick = 0U;
   HostProtocol_StartNextTx();
 }
 
@@ -1050,6 +1119,7 @@ void HostProtocol_OnUartError(UART_HandleTypeDef *huart)
     g_tx_tail = (uint8_t)((g_tx_tail + 1U) % comm_protocol_TX_QUEUE_SIZE);
     --g_tx_count;
     g_tx_active = 0U;
+    g_tx_started_tick = 0U;
     g_last_status = comm_protocol_STATUS_OVERFLOW;
     HostProtocol_StartNextTx();
   }
@@ -1058,4 +1128,9 @@ void HostProtocol_OnUartError(UART_HandleTypeDef *huart)
 HostProtocol_Status_t HostProtocol_GetLastStatus(void)
 {
   return g_last_status;
+}
+
+uint32_t HostProtocol_GetTxTimeoutCount(void)
+{
+  return g_tx_timeout_count;
 }
