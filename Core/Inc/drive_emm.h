@@ -58,6 +58,7 @@ extern __IO uint16_t MMCL_count, MMCL_cmd[MMCL_LEN];
 #define DRIVE_EMM_FEEDBACK_PERIOD_MS ((uint32_t)20U)
 #define DRIVE_EMM_FEEDBACK_TIMEOUT_MS ((uint32_t)500U)
 #define DRIVE_EMM_FEEDBACK_STARTUP_GRACE_MS ((uint32_t)1000U)
+#define DRIVE_EMM_ARM_FEEDBACK_TIMEOUT_MS ((uint32_t)800U)
 #define DRIVE_EMM_ENABLE_HEARTBEAT_PROTECTION (1U)
 #define DRIVE_EMM_HEARTBEAT_PROTECT_MS ((uint32_t)500U)
 
@@ -77,6 +78,7 @@ typedef struct
 HAL_StatusTypeDef drive_emm_Init(void);
 /* 配置需要接受反馈监督的四个底盘电机 ID。 */
 void drive_emm_ConfigureChassisFeedback(uint8_t lf_id, uint8_t rf_id, uint8_t lr_id, uint8_t rr_id);
+HAL_StatusTypeDef drive_emm_MonitorMotor(uint8_t id);
 /* 主循环轮询：推进 DMA 队列、查询四电机反馈并检测发送超时。 */
 void drive_emm_Poll(void);
 void drive_emm_OnUartRxEvent(UART_HandleTypeDef *huart, uint16_t size);
@@ -84,6 +86,9 @@ void drive_emm_OnTxComplete(UART_HandleTypeDef *huart);
 void drive_emm_OnUartError(UART_HandleTypeDef *huart);
 uint8_t drive_emm_IsChassisFeedbackHealthy(void);
 HAL_StatusTypeDef drive_emm_GetMotorFeedback(uint8_t id, DriveEmm_MotorFeedback_t *feedback);
+uint8_t drive_emm_IsMotorFeedbackHealthy(uint8_t id, uint32_t timeout_ms);
+uint8_t drive_emm_IsMotorReached(uint8_t id, int32_t target_pulse,
+                                  int32_t tolerance_pulse, uint32_t timeout_ms);
 
 /**
 ***********************************************************

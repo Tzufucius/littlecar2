@@ -118,6 +118,8 @@ static volatile uint8_t g_tx_count = 0U;
 static volatile uint8_t g_tx_active = 0U;
 static volatile uint32_t g_tx_started_tick = 0U;
 static volatile uint32_t g_tx_timeout_count = 0U;
+/* 机械臂命令失败时写入 ACK detail，供上位机区分未置零、忙碌和故障。 */
+static uint8_t g_arm_ack_detail = 0U;
 
 typedef enum
 {
@@ -589,6 +591,42 @@ static void HostProtocol_SendMotionStatusData(const HostProtocol_Frame_t *frame)
   HostProtocol_SendData(frame, payload, (uint8_t)sizeof(payload));
 }
 
+static void HostProtocol_SendArmStatusData(const HostProtocol_Frame_t *frame)
+{
+  AdvanceArm_RuntimeStatus_t status;
+  uint8_t payload[25] = {0};
+
+  if (AdvanceArm_GetStatus(&status) != ADVANCE_ARM_STATUS_OK)
+  {
+    return;
+  }
+  payload[0] = (uint8_t)status.task_state;
+  payload[1] = (uint8_t)status.lift_position_validity;
+  payload[2] = (uint8_t)status.swing_position_validity;
+  payload[3] = status.active;
+  payload[4] = status.faulted;
+  HostProtocol_WriteI32(&payload[5], status.lift_current_pulse);
+  HostProtocol_WriteI32(&payload[9], status.lift_target_pulse);
+  HostProtocol_WriteI32(&payload[13], status.swing_current_pulse);
+  HostProtocol_WriteI32(&payload[17], status.swing_target_pulse);
+  HostProtocol_WriteU32(&payload[21], status.updated_tick);
+  HostProtocol_SendData(frame, payload, (uint8_t)sizeof(payload));
+}
+
+static void HostProtocol_ReadArmPlan(const uint8_t *payload, AdvanceArm_TaskPlan_t *plan)
+{
+  plan->swing_extend_pulse = HostProtocol_ReadU32(&payload[0]);
+  plan->lift_lower_pulse = HostProtocol_ReadU32(&payload[4]);
+  plan->lift_raise_pulse = HostProtocol_ReadU32(&payload[8]);
+  plan->swing_retract_pulse = HostProtocol_ReadU32(&payload[12]);
+  plan->gripper_close_position = HostProtocol_ReadI32(&payload[16]);
+  plan->gripper_release_position = HostProtocol_ReadI32(&payload[20]);
+  plan->gripper_acceleration = HostProtocol_ReadU16(&payload[24]);
+  plan->gripper_speed = HostProtocol_ReadU16(&payload[26]);
+  plan->servo_wait_ms = HostProtocol_ReadU32(&payload[28]);
+  plan->task_timeout_ms = HostProtocol_ReadU32(&payload[32]);
+}
+
 /* SYSTEM 命令只维护通信状态，不直接控制外设。 */
 static HostProtocol_AckResult_t HostProtocol_HandleSystem(const HostProtocol_Frame_t *frame)
 {
@@ -639,6 +677,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleSafety(const HostProtocol_Fra
     (void)frame->payload[0];
     g_safety_latched = 1U;
     HostProtocol_StopMotion(1U);
+    AdvanceArm_EStop();
     g_control_mode = HOST_CONTROL_SAFETY_LOCKED;
     return ACK_OK;
 
@@ -909,12 +948,16 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
 /* SERVO 命令调用 advance_arm，避免通信层直接操作总线舵机协议。 */
 static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Frame_t *frame)
 {
-  BusServo_Status_t status;
+  AdvanceArm_Status_t arm_status;
+  AdvanceArm_Config_t config;
+  AdvanceArm_TaskPlan_t plan;
 
   if (HostProtocol_IsControlAllowed() == 0U)
   {
     return ACK_DENIED;
   }
+
+  g_arm_ack_detail = 0U;
 
   switch (frame->cmd_id)
   {
@@ -931,12 +974,56 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
     {
       return ACK_BAD_PARAM;
     }
-    status = AdvanceArm_Grab(frame->payload[1], frame->payload[0] != 0U,
-                             HostProtocol_ReadI32(&frame->payload[2]),
-                             HostProtocol_ReadI32(&frame->payload[6]),
-                             HostProtocol_ReadU16(&frame->payload[10]),
-                             HostProtocol_ReadU16(&frame->payload[12]));
-    return (status == drive_bus_servo_STATUS_OK) ? ACK_OK : ACK_FAULT;
+    arm_status = AdvanceArm_Grab(frame->payload[1], frame->payload[0] != 0U,
+                                 HostProtocol_ReadI32(&frame->payload[2]),
+                                 HostProtocol_ReadI32(&frame->payload[6]),
+                                 HostProtocol_ReadU16(&frame->payload[10]),
+                                 HostProtocol_ReadU16(&frame->payload[12]));
+    return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ACK_FAULT;
+
+  case 0x11U:
+    /* ARM_CONFIG：lift_id, swing_id, gripper_id, 两方向, 两速度, 两加速度, 位置容差。 */
+    if ((frame->payload_len != 13U) || (frame->payload[3] > 1U) || (frame->payload[4] > 1U))
+    {
+      return ACK_BAD_LENGTH;
+    }
+    config.lift_motor_id = frame->payload[0];
+    config.swing_motor_id = frame->payload[1];
+    config.gripper_servo_id = frame->payload[2];
+    config.lift_down_direction = (AdvanceArm_MotorDirection_t)frame->payload[3];
+    config.swing_extend_direction = (AdvanceArm_MotorDirection_t)frame->payload[4];
+    config.lift_velocity = HostProtocol_ReadU16(&frame->payload[5]);
+    config.swing_velocity = HostProtocol_ReadU16(&frame->payload[7]);
+    config.lift_acceleration = frame->payload[9];
+    config.swing_acceleration = frame->payload[10];
+    config.position_tolerance_pulse = HostProtocol_ReadI16(&frame->payload[11]);
+    arm_status = AdvanceArm_Configure(&config);
+    g_arm_ack_detail = (uint8_t)arm_status;
+    return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ACK_DENIED;
+
+  case 0x12U:
+  case 0x13U:
+    /* ARM_PICK / ARM_PLACE：4 个位移、夹爪两位置、加速度速度、舵机等待和总超时。 */
+    if (frame->payload_len != 36U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    HostProtocol_ReadArmPlan(frame->payload, &plan);
+    arm_status = (frame->cmd_id == 0x12U) ? AdvanceArm_StartPick(&plan) : AdvanceArm_StartPlace(&plan);
+    g_arm_ack_detail = (uint8_t)arm_status;
+    return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK :
+           ((arm_status == ADVANCE_ARM_STATUS_INVALID_PARAM) ? ACK_BAD_PARAM : ACK_DENIED);
+
+  case 0x14U:
+    if (frame->payload_len != 0U)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    AdvanceArm_Abort();
+    return ACK_OK;
+
+  case 0x15U:
+    return (frame->payload_len == 0U) ? ACK_OK : ACK_BAD_LENGTH;
 
   default:
     return ACK_UNKNOWN_CMD;
@@ -1090,13 +1177,19 @@ void HostProtocol_Poll(void)
   while (HostProtocol_DequeueFrame(&frame) != 0U)
   {
     result = HostProtocol_HandleCommand(&frame);
-    HostProtocol_SendAck(&frame, result, 0U);
+    HostProtocol_SendAck(&frame, result,
+                         (frame.cmd_set == CMDSET_SERVO) ? g_arm_ack_detail : 0U);
     if ((result == ACK_OK) &&
         (frame.msg_type == MSG_CMD) &&
         (frame.cmd_set == CMDSET_CHASSIS) &&
         (frame.cmd_id == 0x0BU))
     {
       HostProtocol_SendMotionStatusData(&frame);
+    }
+    if ((result == ACK_OK) && (frame.msg_type == MSG_CMD) &&
+        (frame.cmd_set == CMDSET_SERVO) && (frame.cmd_id == 0x15U))
+    {
+      HostProtocol_SendArmStatusData(&frame);
     }
   }
 
