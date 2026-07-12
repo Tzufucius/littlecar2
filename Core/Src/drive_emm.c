@@ -13,7 +13,8 @@
 
 #define DRIVE_EMM_TX_FRAME_MAX_LENGTH (MMCL_LEN + 5U)
 #define DRIVE_EMM_RX_DMA_BUFFER_SIZE ((uint16_t)128U)
-#define DRIVE_EMM_FEEDBACK_MOTOR_COUNT ((uint8_t)4U)
+#define DRIVE_EMM_CHASSIS_MOTOR_COUNT ((uint8_t)4U)
+#define DRIVE_EMM_FEEDBACK_MOTOR_COUNT ((uint8_t)6U)
 
 typedef struct
 {
@@ -82,6 +83,25 @@ static DriveEmm_MonitoredMotor_t *DriveEmm_FindMotor(uint8_t id)
     }
   }
   return NULL;
+}
+
+static uint8_t DriveEmm_IsFeedbackHealthy(const DriveEmm_MotorFeedback_t *feedback,
+                                          uint32_t timeout_ms)
+{
+  uint32_t now_tick;
+
+  if (feedback == NULL)
+  {
+    return 0U;
+  }
+  now_tick = HAL_GetTick();
+  if ((feedback->valid == 0U) ||
+      ((now_tick - feedback->updated_tick) > timeout_ms) ||
+      (feedback->stalled != 0U) || (feedback->fault != 0U))
+  {
+    return 0U;
+  }
+  return 1U;
 }
 
 static void DriveEmm_HandleReply(const uint8_t *frame, uint8_t length)
@@ -848,10 +868,10 @@ HAL_StatusTypeDef drive_emm_Init(void)
 
 void drive_emm_ConfigureChassisFeedback(uint8_t lf_id, uint8_t rf_id, uint8_t lr_id, uint8_t rr_id)
 {
-  const uint8_t ids[DRIVE_EMM_FEEDBACK_MOTOR_COUNT] = {lf_id, rf_id, lr_id, rr_id};
+  const uint8_t ids[DRIVE_EMM_CHASSIS_MOTOR_COUNT] = {lf_id, rf_id, lr_id, rr_id};
   uint8_t index;
 
-  for (index = 0U; index < DRIVE_EMM_FEEDBACK_MOTOR_COUNT; ++index)
+  for (index = 0U; index < DRIVE_EMM_CHASSIS_MOTOR_COUNT; ++index)
   {
     g_drive_emm_motors[index].id = ids[index];
     g_drive_emm_motors[index].feedback = (DriveEmm_MotorFeedback_t){0};
@@ -860,6 +880,30 @@ void drive_emm_ConfigureChassisFeedback(uint8_t lf_id, uint8_t rf_id, uint8_t lr
     drive_emm_Modify_Heart_Protect(ids[index], true, DRIVE_EMM_HEARTBEAT_PROTECT_MS);
 #endif
   }
+}
+
+HAL_StatusTypeDef drive_emm_MonitorMotor(uint8_t id)
+{
+  uint8_t index;
+
+  if (id == 0U)
+  {
+    return HAL_ERROR;
+  }
+  if (DriveEmm_FindMotor(id) != NULL)
+  {
+    return HAL_OK;
+  }
+  for (index = DRIVE_EMM_CHASSIS_MOTOR_COUNT; index < DRIVE_EMM_FEEDBACK_MOTOR_COUNT; ++index)
+  {
+    if (g_drive_emm_motors[index].id == 0U)
+    {
+      g_drive_emm_motors[index].id = id;
+      g_drive_emm_motors[index].feedback = (DriveEmm_MotorFeedback_t){0};
+      return HAL_OK;
+    }
+  }
+  return HAL_BUSY;
 }
 
 void drive_emm_OnTxComplete(UART_HandleTypeDef *huart)
@@ -972,12 +1016,11 @@ uint8_t drive_emm_IsChassisFeedbackHealthy(void)
   {
     return 0U;
   }
-  for (index = 0U; index < DRIVE_EMM_FEEDBACK_MOTOR_COUNT; ++index)
+  for (index = 0U; index < DRIVE_EMM_CHASSIS_MOTOR_COUNT; ++index)
   {
     const DriveEmm_MotorFeedback_t *feedback = &g_drive_emm_motors[index].feedback;
     if ((g_drive_emm_motors[index].id == 0U) || (feedback->valid == 0U) ||
-        ((now_tick - feedback->updated_tick) > DRIVE_EMM_FEEDBACK_TIMEOUT_MS) ||
-        (feedback->stalled != 0U) || (feedback->fault != 0U))
+        (DriveEmm_IsFeedbackHealthy(feedback, DRIVE_EMM_FEEDBACK_TIMEOUT_MS) == 0U))
     {
       return 0U;
     }
@@ -1000,6 +1043,36 @@ HAL_StatusTypeDef drive_emm_GetMotorFeedback(uint8_t id, DriveEmm_MotorFeedback_
   }
   *feedback = motor->feedback;
   return HAL_OK;
+}
+
+uint8_t drive_emm_IsMotorFeedbackHealthy(uint8_t id, uint32_t timeout_ms)
+{
+  DriveEmm_MonitoredMotor_t *motor = DriveEmm_FindMotor(id);
+
+  if ((motor == NULL) || (timeout_ms == 0U))
+  {
+    return 0U;
+  }
+  return DriveEmm_IsFeedbackHealthy(&motor->feedback, timeout_ms);
+}
+
+uint8_t drive_emm_IsMotorReached(uint8_t id, int32_t target_pulse,
+                                  int32_t tolerance_pulse, uint32_t timeout_ms)
+{
+  DriveEmm_MonitoredMotor_t *motor = DriveEmm_FindMotor(id);
+  int32_t error;
+
+  if ((motor == NULL) || (tolerance_pulse < 0) ||
+      (DriveEmm_IsFeedbackHealthy(&motor->feedback, timeout_ms) == 0U))
+  {
+    return 0U;
+  }
+  error = motor->feedback.position - target_pulse;
+  if (error < 0)
+  {
+    error = -error;
+  }
+  return (error <= tolerance_pulse) ? 1U : 0U;
 }
 /**
  * @brief    修改电机ID地址

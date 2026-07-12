@@ -41,6 +41,14 @@ extern "C"
     uint16_t speed;
   } BusServo_Command_t;
 
+  /* 首版仅提供缓存接口；待接入实际回读协议后由接收层填充。 */
+  typedef struct
+  {
+    int32_t actual_position;
+    uint8_t valid;
+    uint32_t updated_tick;
+  } BusServo_Feedback_t;
+
   /**
    * @brief  初始化总线舵机设备层并绑定当前工程使用的串口句柄。
    * @param  huart: 用于舵机通信的串口句柄，当前规划固定传入 `&huart4`。
@@ -111,6 +119,9 @@ extern "C"
    * @retval 最近一次状态码。
    */
   BusServo_Status_t BusServo_GetLastStatus(void);
+  BusServo_Status_t BusServo_GetFeedback(uint8_t id, BusServo_Feedback_t *feedback);
+  uint8_t BusServo_IsReached(uint8_t id, int32_t target_position, int32_t tolerance,
+                             uint32_t timeout_ms);
 
 #ifdef __cplusplus
 }
