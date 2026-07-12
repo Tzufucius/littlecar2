@@ -29,6 +29,7 @@
 #include "advance_chassis.h"
 #include "advance_motion.h"
 #include "advance_world.h"
+#include "advance_arm.h"
 #include "comm_pc.h"
 #include "comm_protocol.h"
 #include "car_pose.h"
@@ -209,6 +210,8 @@ static void App_RunScheduledTasks(uint32_t pending)
   if ((pending & APP_TASK_MOTOR) != 0U)
   {
     drive_emm_Poll();
+    BusServo_Poll();
+    AdvanceArm_Poll();
   }
 
   if ((pending & APP_TASK_ORIGIN) != 0U)
@@ -281,6 +284,7 @@ int main(void)
   CarPose_Init();
   AdvanceWorld_Init();
   AdvanceMotion_Init();
+  AdvanceArm_Init();
   (void)drive_emm_Init();
   drive_emm_ConfigureChassisFeedback(
       CHASSIS_MOTOR_LF_ID,
