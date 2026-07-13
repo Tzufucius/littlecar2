@@ -601,6 +601,35 @@ static void HostProtocol_SendMotionStatusData(const HostProtocol_Frame_t *frame)
   HostProtocol_SendData(frame, payload, (uint8_t)sizeof(payload));
 }
 
+static uint8_t HostProtocol_GetLegacyArmTaskState(const AdvanceArm_RuntimeStatus_t *status)
+{
+  if (status->run_state == ADVANCE_ARM_RUN_BOOT)
+  {
+    return 0U;
+  }
+  if (status->run_state == ADVANCE_ARM_RUN_READY)
+  {
+    return 1U;
+  }
+  if (status->run_state == ADVANCE_ARM_RUN_COMPLETE)
+  {
+    return 12U;
+  }
+  if (status->run_state == ADVANCE_ARM_RUN_FAULT)
+  {
+    return 13U;
+  }
+  if (status->run_state == ADVANCE_ARM_RUN_ESTOP)
+  {
+    return 14U;
+  }
+  if (status->task_type == ADVANCE_ARM_TASK_PICK)
+  {
+    return (uint8_t)(2U + ((status->step > 4U) ? 4U : status->step));
+  }
+  return (uint8_t)(7U + ((status->step > 4U) ? 4U : status->step));
+}
+
 static void HostProtocol_SendArmStatusData(const HostProtocol_Frame_t *frame)
 {
   AdvanceArm_RuntimeStatus_t status;
@@ -610,12 +639,11 @@ static void HostProtocol_SendArmStatusData(const HostProtocol_Frame_t *frame)
   {
     return;
   }
-  payload[0] = (uint8_t)status.task_state;
+  payload[0] = HostProtocol_GetLegacyArmTaskState(&status);
   payload[1] = (uint8_t)status.lift_position_validity;
   payload[2] = (uint8_t)status.swing_position_validity;
-  payload[3] = ((status.task_state >= ADVANCE_ARM_TASK_PICK_EXTEND) &&
-                (status.task_state <= ADVANCE_ARM_TASK_COMPLETE)) ? 1U : 0U;
-  payload[4] = (status.task_state == ADVANCE_ARM_TASK_FAULT) ? 1U : 0U;
+  payload[3] = (status.run_state == ADVANCE_ARM_RUN_RUNNING) ? 1U : 0U;
+  payload[4] = (status.run_state == ADVANCE_ARM_RUN_FAULT) ? 1U : 0U;
   HostProtocol_WriteI32(&payload[5], status.lift_current_pulse);
   HostProtocol_WriteI32(&payload[9], status.lift_target_pulse);
   HostProtocol_WriteI32(&payload[13], status.swing_current_pulse);
@@ -1008,7 +1036,8 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
     config.lift_acceleration = frame->payload[9];
     config.swing_acceleration = frame->payload[10];
     config.position_tolerance_pulse = HostProtocol_ReadI16(&frame->payload[11]);
-    arm_status = AdvanceArm_Configure(&config);
+    arm_status = AdvanceArm_IsFixedConfig(&config) ? AdvanceArm_ResetZero()
+                                                   : ADVANCE_ARM_STATUS_INVALID_PARAM;
     g_arm_ack_detail = (uint8_t)arm_status;
     return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ACK_DENIED;
 
@@ -1020,7 +1049,9 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
       return ACK_BAD_LENGTH;
     }
     HostProtocol_ReadArmPlan(frame->payload, &plan);
-    arm_status = (frame->cmd_id == 0x12U) ? AdvanceArm_StartPick(&plan) : AdvanceArm_StartPlace(&plan);
+    arm_status = AdvanceArm_StartLegacyTask(
+        (frame->cmd_id == 0x12U) ? ADVANCE_ARM_TASK_PICK : ADVANCE_ARM_TASK_PLACE,
+        &plan);
     g_arm_ack_detail = (uint8_t)arm_status;
     return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ((arm_status == ADVANCE_ARM_STATUS_INVALID_PARAM) ? ACK_BAD_PARAM : ACK_DENIED);
 

@@ -283,13 +283,13 @@ int main(void)
   CarPose_Init();
   AdvanceWorld_Init();
   AdvanceMotion_Init();
-  AdvanceArm_Init();
   (void)drive_emm_Init();
   drive_emm_ConfigureChassisFeedback(
       CHASSIS_MOTOR_LF_ID,
       CHASSIS_MOTOR_RF_ID,
       CHASSIS_MOTOR_LR_ID,
       CHASSIS_MOTOR_RR_ID);
+  AdvanceArm_Init();
 
   // 外设初始化
   BusServo_Init(&huart4);
