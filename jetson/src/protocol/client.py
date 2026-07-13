@@ -72,6 +72,12 @@ class SystemClient:
         payload = struct.pack("<I", jetson_time_ms)
         self._transport.send_command(CmdSet.SYSTEM, SystemCmd.HEARTBEAT, payload)
 
+    def claim_control(self) -> None:
+        self._transport.send_command(CmdSet.SYSTEM, SystemCmd.CLAIM_CONTROL)
+
+    def release_control(self) -> None:
+        self._transport.send_command(CmdSet.SYSTEM, SystemCmd.RELEASE_CONTROL)
+
 class SafetyClient:
     def __init__(self, transport: SerialTransport) -> None:
         self._transport = transport

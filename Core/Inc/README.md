@@ -9,9 +9,9 @@
 - `drive_bus_servo.h`：总线舵机控制与预留位置反馈接口；实际回读协议待接入。
 - `sensor_wit.h`：WIT / HWT905 IMU 数据接口。
 - `sensor_ops.h`：OPS 定位系统数据接口。
-- `comm_pc.h`：PC / Jetson 原始接收桥接接口。
-- `comm_jetson.h`：Jetson 原始接收调试兼容接口。
-- `comm_protocol.h`：上位机二进制协议解析接口。
+- `comm_common.h`：PC / Jetson 共用的通信来源类型。
+- `comm_host.h`：PC / Jetson 原始接收桥接接口。
+- `comm_protocol.h`：上位机二进制协议解析、来源回包与控制权租约接口。
 - `advance_chassis.h`：麦克纳姆底盘高级运动接口。
 - `advance_world.h`：全局坐标系、world 位姿和坐标变换接口。
 - `advance_arm.h`：机械臂闭环控制器接口，含人工置零后的坐标有效性、非阻塞抓取/放置任务与故障状态。

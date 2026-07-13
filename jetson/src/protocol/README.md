@@ -25,6 +25,7 @@ from protocol import Car
 
 with Car(port="COM8", baudrate=115200) as car:
     car.system.ping()
+    car.system.claim_control()
     car.heartbeat.start()
     car.safety.clear()
     car.chassis.enable(True)
@@ -45,6 +46,8 @@ car.system.ping()
 
 - `car.system.ping()`：发送 `SYS_PING`，等待 ACK。
 - `car.system.heartbeat()`：发送 `SYS_HEARTBEAT`，Payload 为当前上位机毫秒时间。
+- `car.system.claim_control()`：申请控制权租约；成功后才可发送运动和机械臂动作。
+- `car.system.release_control()`：立即停车并释放控制权租约。
 - `car.safety.estop(source=0)`：发送急停命令。
 - `car.safety.safe_stop(mode=0)`：发送安全停止命令，`0` 为平滑停止，`1` 为立即停止。
 - `car.safety.clear()`：清除可恢复安全状态。

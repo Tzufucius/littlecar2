@@ -203,7 +203,7 @@ AdvanceMotion_GetStatus(&status);
 AdvanceMotion_Cancel();
 ```
 
-`main.c` 已在 `HostRx_Poll()` 后周期调用 `AdvanceMotion_Poll()`。上位机命令在本轮被处理后可立即进入控制状态机；急停与取消命令会先撤销活动目标，阻止下一控制周期重新下发速度。
+`main.c` 已在 `HostComm_Poll()` 后周期调用 `AdvanceMotion_Poll()`。上位机命令在本轮被处理后可立即进入控制状态机；急停与取消命令会先撤销活动目标，阻止下一控制周期重新下发速度。
 
 ## 8. GotoPose 目标结构
 

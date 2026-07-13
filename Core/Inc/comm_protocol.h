@@ -7,21 +7,16 @@ extern "C"
 #endif
 
 #include "main.h"
+#include "comm_common.h"
 #include <stdint.h>
 
-  typedef enum
-  {
-    comm_protocol_SOURCE_PC = 0, /*!< PC 命令来源。 */
-    comm_protocol_SOURCE_JETSON,
-    comm_protocol_SOURCE_COUNT
-  } HostProtocol_Source_t;
 
   typedef enum
   {
-    comm_protocol_STATUS_OK = 0, /*!< 处理成功。 */
-    comm_protocol_STATUS_INVALID_PARAM,
-    comm_protocol_STATUS_OVERFLOW,
-    comm_protocol_STATUS_TX_TIMEOUT
+    HOST_PROTOCOL_STATUS_OK = 0, /*!< 处理成功。 */
+    HOST_PROTOCOL_STATUS_INVALID_PARAM,
+    HOST_PROTOCOL_STATUS_OVERFLOW,
+    HOST_PROTOCOL_STATUS_TX_TIMEOUT
   } HostProtocol_Status_t;
 
   /*
@@ -31,7 +26,7 @@ extern "C"
    * - 协议层收到有效命令后，需要从同一路 UART 回发 ACK。
    * - PC 和 Jetson 可以共用同一套帧解析逻辑，但 ACK 必须回到各自来源。
    */
-  void HostProtocol_RegisterSource(HostProtocol_Source_t source, UART_HandleTypeDef *huart);
+  void HostProtocol_RegisterSource(HostSource_t source, UART_HandleTypeDef *huart);
 
   /*
    * 向协议解析器输入原始字节流。
@@ -40,7 +35,7 @@ extern "C"
    * - USART DMA + IDLE 回调中只搬运数据，不直接执行电机动作。
    * - 完整帧被解析并校验通过后，会进入主循环队列等待执行。
    */
-  void HostProtocol_OnBytes(HostProtocol_Source_t source, const uint8_t *data, uint16_t length);
+  void HostProtocol_OnBytes(HostSource_t source, const uint8_t *data, uint16_t length);
 
   /*
    * 在主循环中轮询执行协议命令。

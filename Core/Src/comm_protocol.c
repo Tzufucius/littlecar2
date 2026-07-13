@@ -39,6 +39,8 @@
 #define HOST_PROTOCOL_CMD_SYSTEM_PING ((uint8_t)0x01U)
 #define HOST_PROTOCOL_CMD_SYSTEM_HEARTBEAT ((uint8_t)0x02U)
 #define HOST_PROTOCOL_CMD_SYSTEM_SET_MODE ((uint8_t)0x03U)
+#define HOST_PROTOCOL_CMD_SYSTEM_CLAIM_CONTROL ((uint8_t)0x04U)
+#define HOST_PROTOCOL_CMD_SYSTEM_RELEASE_CONTROL ((uint8_t)0x05U)
 #define HOST_PROTOCOL_CMD_SAFETY_ESTOP ((uint8_t)0x01U)
 #define HOST_PROTOCOL_CMD_SAFETY_STOP ((uint8_t)0x02U)
 #define HOST_PROTOCOL_CMD_SAFETY_CLEAR ((uint8_t)0x03U)
@@ -124,7 +126,7 @@ typedef struct
 
 typedef struct
 {
-  HostProtocol_Source_t source;
+  HostSource_t source;
   uint8_t msg_type;
   uint8_t cmd_set;
   uint8_t cmd_id;
@@ -160,13 +162,19 @@ typedef struct
   volatile uint32_t timeout_count;
 } HostProtocol_TxQueue_t;
 
-static UART_HandleTypeDef *g_comm_protocol_uart[comm_protocol_SOURCE_COUNT] = {0};
-static HostProtocol_Parser_t g_comm_protocol_parser[comm_protocol_SOURCE_COUNT] = {0};
+typedef enum
+{
+  HOST_CONTROL_OWNER_NONE = 0,
+  HOST_CONTROL_OWNER_PC,
+  HOST_CONTROL_OWNER_JETSON
+} HostControlOwner_t;
+
+static UART_HandleTypeDef *g_comm_protocol_uart[HOST_SOURCE_COUNT] = {0};
+static HostProtocol_Parser_t g_comm_protocol_parser[HOST_SOURCE_COUNT] = {0};
 static HostProtocol_RxQueue_t g_rx_queue = {0};
-static HostProtocol_Status_t g_last_status = comm_protocol_STATUS_OK;
-static uint32_t g_last_heartbeat_tick = 0U;
-static uint8_t g_heartbeat_seen = 0U;
-static uint8_t g_heartbeat_online = 0U;
+static HostProtocol_Status_t g_last_status = HOST_PROTOCOL_STATUS_OK;
+static HostControlOwner_t g_control_owner = HOST_CONTROL_OWNER_NONE;
+static uint32_t g_owner_heartbeat_tick = 0U;
 static uint8_t g_safety_latched = 0U;
 static HostProtocol_TxQueue_t g_tx_queue = {0};
 /* 机械臂命令失败时写入 ACK detail，供上位机区分未置零、忙碌和故障。 */
@@ -174,7 +182,7 @@ static uint8_t g_arm_ack_detail = 0U;
 
 static void HostProtocol_StopMotion(uint8_t immediate)
 {
-  AdvanceMotion_CancelIfActive();
+  AdvanceMotion_CancelWithoutStop();
   if (immediate != 0U)
   {
     Chassis_Stop();
@@ -222,7 +230,7 @@ static void HostProtocol_StartNextTx(void)
   else
   {
     g_tx_queue.active = 0U;
-    g_last_status = comm_protocol_STATUS_OVERFLOW;
+    g_last_status = HOST_PROTOCOL_STATUS_OVERFLOW;
   }
 }
 
@@ -249,7 +257,7 @@ static void HostProtocol_RecoverTxTimeout(void)
   /* 当前发送使用中断模式，AbortTransmit 会停止 TX 中断并恢复 UART READY 状态。 */
   (void)HAL_UART_AbortTransmit(item->huart);
   ++g_tx_queue.timeout_count;
-  g_last_status = comm_protocol_STATUS_TX_TIMEOUT;
+  g_last_status = HOST_PROTOCOL_STATUS_TX_TIMEOUT;
   g_tx_queue.active = 0U;
   g_tx_queue.started_tick = 0U;
   if (item->retry_count < comm_protocol_TX_MAX_RETRIES)
@@ -273,7 +281,7 @@ static void HostProtocol_QueueTx(UART_HandleTypeDef *huart, const uint8_t *data,
   if ((huart == NULL) || (data == NULL) || (length == 0U) ||
       (length > comm_protocol_MAX_FRAME_LEN))
   {
-    g_last_status = comm_protocol_STATUS_INVALID_PARAM;
+    g_last_status = HOST_PROTOCOL_STATUS_INVALID_PARAM;
     return;
   }
 
@@ -281,7 +289,7 @@ static void HostProtocol_QueueTx(UART_HandleTypeDef *huart, const uint8_t *data,
   if (g_tx_queue.count >= comm_protocol_TX_QUEUE_SIZE)
   {
     __enable_irq();
-    g_last_status = comm_protocol_STATUS_OVERFLOW;
+    g_last_status = HOST_PROTOCOL_STATUS_OVERFLOW;
     return;
   }
   slot = g_tx_queue.head;
@@ -413,30 +421,28 @@ static uint8_t HostProtocol_AbsI16Exceeds(int16_t value, int32_t limit)
  * 急停锁定后，或者已经启用过心跳但心跳超时后，普通运动命令会被拒绝。
  * SAFETY 命令本身不走这个检查，保证急停/清除等动作仍可执行。
  */
-static uint8_t HostProtocol_IsControlAllowed(void)
+static uint8_t HostProtocol_IsControlAllowed(HostSource_t source)
 {
   if (g_safety_latched != 0U)
   {
     return 0U;
   }
 
-  if ((g_heartbeat_seen != 0U) && (g_heartbeat_online == 0U))
-  {
-    return 0U;
-  }
-
-  return 1U;
+  return ((source < HOST_SOURCE_COUNT) &&
+          ((HostControlOwner_t)(source + 1U) == g_control_owner))
+             ? 1U
+             : 0U;
 }
 
 /* 收到过心跳后，如果超过 300ms 未刷新，则认为上位机离线并停车。 */
 static void HostProtocol_CheckHeartbeatTimeout(void)
 {
-  if ((g_heartbeat_seen != 0U) &&
-      (g_heartbeat_online != 0U) &&
-      ((HAL_GetTick() - g_last_heartbeat_tick) > comm_protocol_HEARTBEAT_MS))
+  if ((g_control_owner != HOST_CONTROL_OWNER_NONE) &&
+      ((HAL_GetTick() - g_owner_heartbeat_tick) > comm_protocol_HEARTBEAT_MS))
   {
-    g_heartbeat_online = 0U;
     HostProtocol_StopMotion(1U);
+    g_control_owner = HOST_CONTROL_OWNER_NONE;
+    g_owner_heartbeat_tick = 0U;
   }
 }
 
@@ -446,20 +452,20 @@ static void HostProtocol_CheckHeartbeatTimeout(void)
  * 这样 DMA/IDLE 回调不会直接调用电机、舵机等业务函数，降低中断内耗时
  * 和串口收包期间的竞态风险。
  */
-static uint8_t HostProtocol_EnqueueFrame(HostProtocol_Source_t source, const uint8_t *frame, uint16_t frame_len)
+static uint8_t HostProtocol_EnqueueFrame(HostSource_t source, const uint8_t *frame, uint16_t frame_len)
 {
   HostProtocol_Frame_t *item;
   uint8_t payload_len;
 
-  if ((source >= comm_protocol_SOURCE_COUNT) || (frame_len < (comm_protocol_HEADER_LEN + comm_protocol_CRC_LEN)))
+  if ((source >= HOST_SOURCE_COUNT) || (frame_len < (comm_protocol_HEADER_LEN + comm_protocol_CRC_LEN)))
   {
-    g_last_status = comm_protocol_STATUS_INVALID_PARAM;
+    g_last_status = HOST_PROTOCOL_STATUS_INVALID_PARAM;
     return 0U;
   }
 
   if (g_rx_queue.count >= comm_protocol_QUEUE_SIZE)
   {
-    g_last_status = comm_protocol_STATUS_OVERFLOW;
+    g_last_status = HOST_PROTOCOL_STATUS_OVERFLOW;
     return 0U;
   }
 
@@ -478,7 +484,7 @@ static uint8_t HostProtocol_EnqueueFrame(HostProtocol_Source_t source, const uin
 
   g_rx_queue.head = (uint8_t)((g_rx_queue.head + 1U) % comm_protocol_QUEUE_SIZE);
   ++g_rx_queue.count;
-  g_last_status = comm_protocol_STATUS_OK;
+  g_last_status = HOST_PROTOCOL_STATUS_OK;
   return 1U;
 }
 
@@ -518,7 +524,7 @@ static void HostProtocol_SendAck(const HostProtocol_Frame_t *frame, HostProtocol
   uint8_t tx[comm_protocol_HEADER_LEN + 4U + comm_protocol_CRC_LEN];
   uint16_t crc;
 
-  if ((frame == NULL) || (frame->source >= comm_protocol_SOURCE_COUNT))
+  if ((frame == NULL) || (frame->source >= HOST_SOURCE_COUNT))
   {
     return;
   }
@@ -552,7 +558,7 @@ static void HostProtocol_SendData(const HostProtocol_Frame_t *frame, const uint8
   uint8_t tx[comm_protocol_HEADER_LEN + comm_protocol_MAX_PAYLOAD + comm_protocol_CRC_LEN];
   uint16_t crc;
 
-  if ((frame == NULL) || (frame->source >= comm_protocol_SOURCE_COUNT))
+  if ((frame == NULL) || (frame->source >= HOST_SOURCE_COUNT))
   {
     return;
   }
@@ -698,15 +704,16 @@ static HostProtocol_AckResult_t HostProtocol_HandleSystem(const HostProtocol_Fra
     return (frame->payload_len == HOST_PROTOCOL_PAYLOAD_LEN_NONE) ? ACK_OK : ACK_BAD_LENGTH;
 
   case HOST_PROTOCOL_CMD_SYSTEM_HEARTBEAT:
-    /* SYS_HEARTBEAT：Payload 为 uint32_t 上位机时间戳，当前只用于刷新在线状态。 */
+    /* SYS_HEARTBEAT：仅当前控制者的心跳会续租。 */
     if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_HEARTBEAT)
     {
       return ACK_BAD_LENGTH;
     }
     (void)HostProtocol_ReadU32(frame->payload);
-    g_last_heartbeat_tick = HAL_GetTick();
-    g_heartbeat_seen = 1U;
-    g_heartbeat_online = 1U;
+    if ((HostControlOwner_t)(frame->source + 1U) == g_control_owner)
+    {
+      g_owner_heartbeat_tick = HAL_GetTick();
+    }
     return ACK_OK;
 
   case HOST_PROTOCOL_CMD_SYSTEM_SET_MODE:
@@ -716,6 +723,34 @@ static HostProtocol_AckResult_t HostProtocol_HandleSystem(const HostProtocol_Fra
       return ACK_BAD_LENGTH;
     }
     (void)frame->payload[0];
+    return ACK_OK;
+
+  case HOST_PROTOCOL_CMD_SYSTEM_CLAIM_CONTROL:
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    if ((g_control_owner != HOST_CONTROL_OWNER_NONE) &&
+        (g_control_owner != (HostControlOwner_t)(frame->source + 1U)))
+    {
+      return ACK_DENIED;
+    }
+    g_control_owner = (HostControlOwner_t)(frame->source + 1U);
+    g_owner_heartbeat_tick = HAL_GetTick();
+    return ACK_OK;
+
+  case HOST_PROTOCOL_CMD_SYSTEM_RELEASE_CONTROL:
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    if (g_control_owner != (HostControlOwner_t)(frame->source + 1U))
+    {
+      return ACK_DENIED;
+    }
+    HostProtocol_StopMotion(1U);
+    g_control_owner = HOST_CONTROL_OWNER_NONE;
+    g_owner_heartbeat_tick = 0U;
     return ACK_OK;
 
   default:
@@ -737,6 +772,8 @@ static HostProtocol_AckResult_t HostProtocol_HandleSafety(const HostProtocol_Fra
     (void)frame->payload[0];
     g_safety_latched = 1U;
     HostProtocol_StopMotion(1U);
+    g_control_owner = HOST_CONTROL_OWNER_NONE;
+    g_owner_heartbeat_tick = 0U;
     AdvanceArm_EStop();
     return ACK_OK;
 
@@ -802,8 +839,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
   AdvanceMotion_Status_t motion_status;
   WorldGoalPose2D_t goal;
 
-  if ((HostProtocol_IsControlAllowed() == 0U) &&
-      (frame->cmd_id != HOST_PROTOCOL_CMD_CHASSIS_CANCEL_GOAL) &&
+  if ((HostProtocol_IsControlAllowed(frame->source) == 0U) &&
       (frame->cmd_id != HOST_PROTOCOL_CMD_CHASSIS_GET_MOTION_STATUS))
   {
     return ACK_DENIED;
@@ -1012,7 +1048,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
 
   g_arm_ack_detail = 0U;
   if ((frame->cmd_id != HOST_PROTOCOL_CMD_ARM_GET_STATUS) &&
-      (HostProtocol_IsControlAllowed() == 0U))
+      (HostProtocol_IsControlAllowed(frame->source) == 0U))
   {
     return ACK_DENIED;
   }
@@ -1150,7 +1186,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleCommand(const HostProtocol_Fr
  * - 收满 9 字节基础头后检查 Version，并根据 Length 计算 expected_len。
  * - 收满 expected_len 后校验 CRC，通过才入队，失败直接丢弃。
  */
-static void HostProtocol_FeedByte(HostProtocol_Source_t source, uint8_t byte)
+static void HostProtocol_FeedByte(HostSource_t source, uint8_t byte)
 {
   HostProtocol_Parser_t *parser = &g_comm_protocol_parser[source];
   uint16_t crc_calc;
@@ -1217,27 +1253,27 @@ static void HostProtocol_FeedByte(HostProtocol_Source_t source, uint8_t byte)
 }
 
 /* 注册接收源对应 UART，主要用于 ACK 回发。 */
-void HostProtocol_RegisterSource(HostProtocol_Source_t source, UART_HandleTypeDef *huart)
+void HostProtocol_RegisterSource(HostSource_t source, UART_HandleTypeDef *huart)
 {
-  if (source >= comm_protocol_SOURCE_COUNT)
+  if (source >= HOST_SOURCE_COUNT)
   {
-    g_last_status = comm_protocol_STATUS_INVALID_PARAM;
+    g_last_status = HOST_PROTOCOL_STATUS_INVALID_PARAM;
     return;
   }
 
   g_comm_protocol_uart[source] = huart;
   HostProtocol_ResetParser(&g_comm_protocol_parser[source]);
-  g_last_status = comm_protocol_STATUS_OK;
+  g_last_status = HOST_PROTOCOL_STATUS_OK;
 }
 
 /* 从 DMA/IDLE 接收层输入原始字节，可一次输入半帧、多帧或粘包数据。 */
-void HostProtocol_OnBytes(HostProtocol_Source_t source, const uint8_t *data, uint16_t length)
+void HostProtocol_OnBytes(HostSource_t source, const uint8_t *data, uint16_t length)
 {
   uint16_t index;
 
-  if ((source >= comm_protocol_SOURCE_COUNT) || (data == NULL))
+  if ((source >= HOST_SOURCE_COUNT) || (data == NULL))
   {
-    g_last_status = comm_protocol_STATUS_INVALID_PARAM;
+    g_last_status = HOST_PROTOCOL_STATUS_INVALID_PARAM;
     return;
   }
 
@@ -1303,7 +1339,7 @@ void HostProtocol_OnUartError(UART_HandleTypeDef *huart)
     --g_tx_queue.count;
     g_tx_queue.active = 0U;
     g_tx_queue.started_tick = 0U;
-    g_last_status = comm_protocol_STATUS_OVERFLOW;
+    g_last_status = HOST_PROTOCOL_STATUS_OVERFLOW;
     HostProtocol_StartNextTx();
   }
 }

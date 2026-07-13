@@ -1,4 +1,4 @@
-﻿/* USER CODE BEGIN Header */
+/* USER CODE BEGIN Header */
 /**
  ******************************************************************************
  * @file           : main.c
@@ -30,7 +30,7 @@
 #include "advance_motion.h"
 #include "advance_world.h"
 #include "advance_arm.h"
-#include "comm_pc.h"
+#include "comm_host.h"
 #include "comm_protocol.h"
 #include "car_pose.h"
 
@@ -187,7 +187,7 @@ static void App_SafetyCheck(void)
   if ((Chassis_IsMotionCommandActive() != 0U) &&
       (drive_emm_IsChassisFeedbackHealthy() == 0U))
   {
-    AdvanceMotion_CancelIfActive();
+    AdvanceMotion_CancelWithoutStop();
     Chassis_Stop();
   }
 }
@@ -196,7 +196,7 @@ static void App_RunScheduledTasks(uint32_t pending)
 {
   if ((pending & APP_TASK_PROTOCOL) != 0U)
   {
-    HostRx_Poll();
+    HostComm_Poll();
   }
 
   if ((pending & APP_TASK_WORLD) != 0U)
@@ -295,14 +295,14 @@ int main(void)
   BusServo_Init(&huart4);
 
   // 通信初始化
-  if (HostRx_InitPc(&huart1) != comm_pc_STATUS_OK)
+  if (HostComm_InitChannel(HOST_SOURCE_PC, &huart1) != HOST_COMM_STATUS_OK)
   {
-    printf("HostRx PC init failed\r\n");
+    printf("HostComm PC init failed\r\n");
   }
 
-  if (HostRx_InitJetson(&huart6) != comm_pc_STATUS_OK)
+  if (HostComm_InitChannel(HOST_SOURCE_JETSON, &huart6) != HOST_COMM_STATUS_OK)
   {
-    printf("HostRx Jetson init failed\r\n");
+    printf("HostComm Jetson init failed\r\n");
   }
 
   /* 原点建立由 1 s 调度任务重试，不阻塞等待 OPS 数据。 */
@@ -704,12 +704,12 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 
   if (huart->Instance == USART1)
   {
-    HostRx_OnUartRxEvent(huart, Size);
+    HostComm_OnUartRxEvent(huart, Size);
   }
 
   if (huart->Instance == USART6)
   {
-    HostRx_OnUartRxEvent(huart, Size);
+    HostComm_OnUartRxEvent(huart, Size);
   }
 }
 
@@ -755,12 +755,12 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 
   if (huart->Instance == USART6)
   {
-    HostRx_OnUartError(huart);
+    HostComm_OnUartError(huart);
   }
 
   if (huart->Instance == USART1)
   {
-    HostRx_OnUartError(huart);
+    HostComm_OnUartError(huart);
   }
 }
 
