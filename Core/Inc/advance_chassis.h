@@ -57,26 +57,6 @@ extern "C"
 #define CHASSIS_HALF_WIDTH_MM (90.0f) /*!< 车体半宽，单位为 mm。 */
 #define CHASSIS_MOTOR_GEAR_RATIO (1.0f) /*!< 电机与车轮传动比。 */
 
-/*
- * 各运动动作的平滑移动预设参数。
- * acc 越大响应越快；acc 越小启动和变速越平滑。
- */
-#define CHASSIS_FORWARD_PRESET_RPM ((uint16_t)100U) /*!< 前进预设轮速，单位为 RPM。 */
-#define CHASSIS_FORWARD_PRESET_ACC ((uint8_t)10U) /*!< 前进预设加速度。 */
-#define CHASSIS_BACKWARD_PRESET_RPM ((uint16_t)100U) /*!< 后退预设轮速，单位为 RPM。 */
-#define CHASSIS_BACKWARD_PRESET_ACC ((uint8_t)10U) /*!< 后退预设加速度。 */
-#define CHASSIS_STRAFE_PRESET_RPM ((uint16_t)100U) /*!< 平移预设轮速，单位为 RPM。 */
-#define CHASSIS_STRAFE_PRESET_ACC ((uint8_t)10U) /*!< 平移预设加速度。 */
-#define CHASSIS_ROTATE_PRESET_RPM ((uint16_t)80U) /*!< 原地旋转预设轮速，单位为 RPM。 */
-#define CHASSIS_ROTATE_PRESET_ACC ((uint8_t)8U) /*!< 原地旋转预设加速度。 */
-#define CHASSIS_DIFF_LEFT_PRESET_RPM ((int16_t)80) /*!< 差速左侧预设轮速，单位为 RPM。 */
-#define CHASSIS_DIFF_RIGHT_PRESET_RPM ((int16_t)120) /*!< 差速右侧预设轮速，单位为 RPM。 */
-#define CHASSIS_DIFF_PRESET_ACC ((uint8_t)8U) /*!< 差速转向预设加速度。 */
-#define CHASSIS_MECANUM_FORWARD_PRESET_RPM ((int16_t)80) /*!< 麦克纳姆前进预设速度，单位为 RPM。 */
-#define CHASSIS_MECANUM_STRAFE_PRESET_RPM ((int16_t)0) /*!< 麦克纳姆平移预设速度，单位为 RPM。 */
-#define CHASSIS_MECANUM_ROTATE_PRESET_RPM ((int16_t)0) /*!< 麦克纳姆旋转预设速度，单位为 RPM。 */
-#define CHASSIS_MECANUM_PRESET_ACC ((uint8_t)8U) /*!< 麦克纳姆运动预设加速度。 */
-
     /*
      * 使能或失能四个底盘电机。
      * enable=true 表示打开电机输出/保持力；enable=false 表示关闭电机输出。
@@ -98,13 +78,6 @@ extern "C"
     uint8_t Chassis_IsMotionCommandActive(void);
 
     /*
-     * 直接设置四个轮子的转速。
-     * lf_rpm/rf_rpm/lr_rpm/rr_rpm 使用有符号 RPM：
-     * 正数表示向前运动贡献，负数表示向后运动贡献。
-     */
-    void Chassis_SetMotorRPM(int16_t lf_rpm, int16_t rf_rpm, int16_t lr_rpm, int16_t rr_rpm);
-
-    /*
      * 直接设置四个轮子的转速，并指定加速度参数。
      * acc 会传给 Emm 速度模式；在 Emm 协议中，0 表示直接启动。
      */
@@ -115,130 +88,7 @@ extern "C"
      * vx_right_mm_s > 0: move right; vy_forward_mm_s > 0: move forward.
      * wz_ccw_deg_s > 0: rotate counter-clockwise when viewed from above.
      */
-    void Chassis_SetBodyVelocity(float vx_right_mm_s, float vy_forward_mm_s, float wz_ccw_deg_s);
     void Chassis_SetBodyVelocityEx(float vx_right_mm_s, float vy_forward_mm_s, float wz_ccw_deg_s, uint8_t acc);
-
-    /*
-     * 前进。
-     * 轮速分配：LF +，RF +，LR +，RR +。
-     */
-    void Chassis_Forward(uint16_t rpm);
-
-    /*
-     * 前进，并指定加速度，用于调整平滑程度和响应速度。
-     */
-    void Chassis_ForwardEx(uint16_t rpm, uint8_t acc);
-
-    /*
-     * 按 CHASSIS_FORWARD_PRESET_RPM/ACC 预设参数前进。
-     */
-    void Chassis_ForwardPreset(void);
-
-    /*
-     * 后退。
-     * 轮速分配：LF -，RF -，LR -，RR -。
-     */
-    void Chassis_Backward(uint16_t rpm);
-
-    /*
-     * 后退，并指定加速度。
-     */
-    void Chassis_BackwardEx(uint16_t rpm, uint8_t acc);
-
-    /*
-     * 按 CHASSIS_BACKWARD_PRESET_RPM/ACC 预设参数后退。
-     */
-    void Chassis_BackwardPreset(void);
-
-    /*
-     * 左平移，车头方向不变。
-     * 轮速分配：LF -，RF +，LR +，RR -。
-     */
-    void Chassis_StrafeLeft(uint16_t rpm);
-
-    /*
-     * 左平移，并指定加速度。
-     */
-    void Chassis_StrafeLeftEx(uint16_t rpm, uint8_t acc);
-
-    /*
-     * 按 CHASSIS_STRAFE_PRESET_RPM/ACC 预设参数左平移。
-     */
-    void Chassis_StrafeLeftPreset(void);
-
-    /*
-     * 右平移，车头方向不变。
-     * 轮速分配：LF +，RF -，LR -，RR +。
-     */
-    void Chassis_StrafeRight(uint16_t rpm);
-
-    /*
-     * 右平移，并指定加速度。
-     */
-    void Chassis_StrafeRightEx(uint16_t rpm, uint8_t acc);
-
-    /*
-     * 按 CHASSIS_STRAFE_PRESET_RPM/ACC 预设参数右平移。
-     */
-    void Chassis_StrafeRightPreset(void);
-
-    /*
-     * 左原地旋转。
-     * 轮速分配：LF -，RF +，LR -，RR +。
-     */
-    void Chassis_RotateLeft(uint16_t rpm);
-
-    /*
-     * 左原地旋转，并指定加速度。
-     */
-    void Chassis_RotateLeftEx(uint16_t rpm, uint8_t acc);
-
-    /*
-     * 按 CHASSIS_ROTATE_PRESET_RPM/ACC 预设参数左原地旋转。
-     */
-    void Chassis_RotateLeftPreset(void);
-
-    /*
-     * 右原地旋转。
-     * 轮速分配：LF +，RF -，LR +，RR -。
-     */
-    void Chassis_RotateRight(uint16_t rpm);
-
-    /*
-     * 右原地旋转，并指定加速度。
-     */
-    void Chassis_RotateRightEx(uint16_t rpm, uint8_t acc);
-
-    /*
-     * 按 CHASSIS_ROTATE_PRESET_RPM/ACC 预设参数右原地旋转。
-     */
-    void Chassis_RotateRightPreset(void);
-
-    /*
-     * 差速转向。
-     * left_rpm 控制 LF/LR，right_rpm 控制 RF/RR。
-     * 例如 left_rpm=100、right_rpm=50 时，小车一边前进一边向右转。
-     */
-    void Chassis_DifferentialTurn(int16_t left_rpm, int16_t right_rpm);
-
-    /*
-     * 差速转向，并指定加速度。
-     */
-    void Chassis_DifferentialTurnEx(int16_t left_rpm, int16_t right_rpm, uint8_t acc);
-
-    /*
-     * 按 CHASSIS_DIFF_LEFT_PRESET_RPM、
-     * CHASSIS_DIFF_RIGHT_PRESET_RPM 和 CHASSIS_DIFF_PRESET_ACC 预设参数差速转向。
-     */
-    void Chassis_DifferentialTurnPreset(void);
-
-    /*
-     * 通用麦克纳姆轮运动命令。
-     * forward_rpm：正数前进，负数后退。
-     * strafe_rpm：正数右平移，负数左平移。
-     * rotate_rpm：正数右旋转，负数左旋转。
-     */
-    void Chassis_MoveMecanum(int16_t forward_rpm, int16_t strafe_rpm, int16_t wz_ccw_rpm);
 
     /*
      * 通用麦克纳姆轮运动命令，并指定加速度。
@@ -250,10 +100,6 @@ extern "C"
      */
     void Chassis_MoveMecanumEx(int16_t forward_rpm, int16_t strafe_rpm, int16_t wz_ccw_rpm, uint8_t acc);
 
-    /*
-     * 按 CHASSIS_MECANUM_*_PRESET_* 参数执行通用麦克纳姆轮运动。
-     */
-    void Chassis_MoveMecanumPreset(void);
 
 #ifdef __cplusplus
 }
