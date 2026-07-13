@@ -36,6 +36,48 @@
 #define comm_protocol_HEARTBEAT_MS ((uint32_t)300U)
 #define comm_protocol_TX_QUEUE_SIZE ((uint8_t)8U)
 
+#define HOST_PROTOCOL_CMD_SYSTEM_PING ((uint8_t)0x01U)
+#define HOST_PROTOCOL_CMD_SYSTEM_HEARTBEAT ((uint8_t)0x02U)
+#define HOST_PROTOCOL_CMD_SYSTEM_SET_MODE ((uint8_t)0x03U)
+#define HOST_PROTOCOL_CMD_SAFETY_ESTOP ((uint8_t)0x01U)
+#define HOST_PROTOCOL_CMD_SAFETY_STOP ((uint8_t)0x02U)
+#define HOST_PROTOCOL_CMD_SAFETY_CLEAR ((uint8_t)0x03U)
+#define HOST_PROTOCOL_CMD_CHASSIS_ENABLE ((uint8_t)0x01U)
+#define HOST_PROTOCOL_CMD_CHASSIS_STOP ((uint8_t)0x02U)
+#define HOST_PROTOCOL_CMD_CHASSIS_SET_RPM ((uint8_t)0x03U)
+#define HOST_PROTOCOL_CMD_CHASSIS_MECANUM ((uint8_t)0x04U)
+#define HOST_PROTOCOL_CMD_CHASSIS_BODY_VELOCITY ((uint8_t)0x05U)
+#define HOST_PROTOCOL_CMD_CHASSIS_WORLD_VELOCITY ((uint8_t)0x06U)
+#define HOST_PROTOCOL_CMD_CHASSIS_GOTO_POSE ((uint8_t)0x07U)
+#define HOST_PROTOCOL_CMD_CHASSIS_CANCEL_GOAL ((uint8_t)0x08U)
+#define HOST_PROTOCOL_CMD_CHASSIS_RESET_ORIGIN ((uint8_t)0x09U)
+#define HOST_PROTOCOL_CMD_CHASSIS_GET_MOTION_STATUS ((uint8_t)0x0BU)
+#define HOST_PROTOCOL_CMD_ARM_GRAB ((uint8_t)0x10U)
+#define HOST_PROTOCOL_CMD_ARM_CONFIG ((uint8_t)0x11U)
+#define HOST_PROTOCOL_CMD_ARM_PICK ((uint8_t)0x12U)
+#define HOST_PROTOCOL_CMD_ARM_PLACE ((uint8_t)0x13U)
+#define HOST_PROTOCOL_CMD_ARM_ABORT ((uint8_t)0x14U)
+#define HOST_PROTOCOL_CMD_ARM_GET_STATUS ((uint8_t)0x15U)
+#define HOST_PROTOCOL_CMD_ARM_RESET_ZERO ((uint8_t)0x16U)
+
+#define HOST_PROTOCOL_PAYLOAD_LEN_NONE ((uint8_t)0U)
+#define HOST_PROTOCOL_PAYLOAD_LEN_FLAG ((uint8_t)1U)
+#define HOST_PROTOCOL_PAYLOAD_LEN_HEARTBEAT ((uint8_t)4U)
+#define HOST_PROTOCOL_PAYLOAD_LEN_CHASSIS_RPM ((uint8_t)9U)
+#define HOST_PROTOCOL_PAYLOAD_LEN_CHASSIS_VELOCITY ((uint8_t)7U)
+#define HOST_PROTOCOL_PAYLOAD_LEN_GOTO_POSE ((uint8_t)22U)
+#define HOST_PROTOCOL_PAYLOAD_LEN_ARM_CONFIG ((uint8_t)13U)
+#define HOST_PROTOCOL_PAYLOAD_LEN_ARM_GRAB_LEGACY ((uint8_t)14U)
+#define HOST_PROTOCOL_PAYLOAD_LEN_ARM_PLAN_LEGACY ((uint8_t)36U)
+
+#define HOST_PROTOCOL_ARM_STATE_BOOT ((uint8_t)0U)
+#define HOST_PROTOCOL_ARM_STATE_READY ((uint8_t)1U)
+#define HOST_PROTOCOL_ARM_STATE_PICK_EXTEND ((uint8_t)2U)
+#define HOST_PROTOCOL_ARM_STATE_PLACE_EXTEND ((uint8_t)7U)
+#define HOST_PROTOCOL_ARM_STATE_COMPLETE ((uint8_t)12U)
+#define HOST_PROTOCOL_ARM_STATE_FAULT ((uint8_t)13U)
+#define HOST_PROTOCOL_ARM_STATE_ESTOP ((uint8_t)14U)
+
 typedef enum
 {
   /* 上位机发给 STM32 的控制命令。 */
@@ -118,17 +160,6 @@ typedef struct
   volatile uint32_t timeout_count;
 } HostProtocol_TxQueue_t;
 
-typedef enum
-{
-  HOST_CONTROL_IDLE = 0U,
-  HOST_CONTROL_MOTOR_RPM,
-  HOST_CONTROL_MECANUM,
-  HOST_CONTROL_BODY_VELOCITY,
-  HOST_CONTROL_WORLD_VELOCITY,
-  HOST_CONTROL_GOTO_POSE,
-  HOST_CONTROL_SAFETY_LOCKED
-} HostProtocol_ControlMode_t;
-
 static UART_HandleTypeDef *g_comm_protocol_uart[comm_protocol_SOURCE_COUNT] = {0};
 static HostProtocol_Parser_t g_comm_protocol_parser[comm_protocol_SOURCE_COUNT] = {0};
 static HostProtocol_RxQueue_t g_rx_queue = {0};
@@ -137,7 +168,6 @@ static uint32_t g_last_heartbeat_tick = 0U;
 static uint8_t g_heartbeat_seen = 0U;
 static uint8_t g_heartbeat_online = 0U;
 static uint8_t g_safety_latched = 0U;
-static HostProtocol_ControlMode_t g_control_mode = HOST_CONTROL_IDLE;
 static HostProtocol_TxQueue_t g_tx_queue = {0};
 /* 机械臂命令失败时写入 ACK detail，供上位机区分未置零、忙碌和故障。 */
 static uint8_t g_arm_ack_detail = 0U;
@@ -153,16 +183,6 @@ static void HostProtocol_StopMotion(uint8_t immediate)
   {
     Chassis_SmoothStop(CHASSIS_DEFAULT_ACC);
   }
-  g_control_mode = HOST_CONTROL_IDLE;
-}
-
-static void HostProtocol_SelectMotionMode(HostProtocol_ControlMode_t mode)
-{
-  if (mode != HOST_CONTROL_GOTO_POSE)
-  {
-    AdvanceMotion_CancelIfActive();
-  }
-  g_control_mode = mode;
 }
 
 static uint32_t HostProtocol_GetTxTimeoutMs(const HostProtocol_TxItem_t *item)
@@ -605,29 +625,31 @@ static uint8_t HostProtocol_GetLegacyArmTaskState(const AdvanceArm_RuntimeStatus
 {
   if (status->run_state == ADVANCE_ARM_RUN_BOOT)
   {
-    return 0U;
+    return HOST_PROTOCOL_ARM_STATE_BOOT;
   }
   if (status->run_state == ADVANCE_ARM_RUN_READY)
   {
-    return 1U;
+    return HOST_PROTOCOL_ARM_STATE_READY;
   }
   if (status->run_state == ADVANCE_ARM_RUN_COMPLETE)
   {
-    return 12U;
+    return HOST_PROTOCOL_ARM_STATE_COMPLETE;
   }
   if (status->run_state == ADVANCE_ARM_RUN_FAULT)
   {
-    return 13U;
+    return HOST_PROTOCOL_ARM_STATE_FAULT;
   }
   if (status->run_state == ADVANCE_ARM_RUN_ESTOP)
   {
-    return 14U;
+    return HOST_PROTOCOL_ARM_STATE_ESTOP;
   }
   if (status->task_type == ADVANCE_ARM_TASK_PICK)
   {
-    return (uint8_t)(2U + ((status->step > 4U) ? 4U : status->step));
+    return (uint8_t)(HOST_PROTOCOL_ARM_STATE_PICK_EXTEND +
+                     ((status->step > 4U) ? 4U : status->step));
   }
-  return (uint8_t)(7U + ((status->step > 4U) ? 4U : status->step));
+  return (uint8_t)(HOST_PROTOCOL_ARM_STATE_PLACE_EXTEND +
+                   ((status->step > 4U) ? 4U : status->step));
 }
 
 static void HostProtocol_SendArmStatusData(const HostProtocol_Frame_t *frame)
@@ -671,13 +693,13 @@ static HostProtocol_AckResult_t HostProtocol_HandleSystem(const HostProtocol_Fra
 {
   switch (frame->cmd_id)
   {
-  case 0x01U:
+  case HOST_PROTOCOL_CMD_SYSTEM_PING:
     /* SYS_PING：无 Payload，只用于确认协议链路和 ACK。 */
-    return (frame->payload_len == 0U) ? ACK_OK : ACK_BAD_LENGTH;
+    return (frame->payload_len == HOST_PROTOCOL_PAYLOAD_LEN_NONE) ? ACK_OK : ACK_BAD_LENGTH;
 
-  case 0x02U:
+  case HOST_PROTOCOL_CMD_SYSTEM_HEARTBEAT:
     /* SYS_HEARTBEAT：Payload 为 uint32_t 上位机时间戳，当前只用于刷新在线状态。 */
-    if (frame->payload_len != 4U)
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_HEARTBEAT)
     {
       return ACK_BAD_LENGTH;
     }
@@ -687,14 +709,13 @@ static HostProtocol_AckResult_t HostProtocol_HandleSystem(const HostProtocol_Fra
     g_heartbeat_online = 1U;
     return ACK_OK;
 
-  case 0x03U:
-    /* SYS_SET_MODE：预留控制模式，当前只保存值，不改变执行逻辑。 */
-    if (frame->payload_len != 1U)
+  case HOST_PROTOCOL_CMD_SYSTEM_SET_MODE:
+    /* 保留一个发布周期的空操作兼容命令。 */
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_FLAG)
     {
       return ACK_BAD_LENGTH;
     }
-    /* 系统模式不再与底盘运动控制权混用，仅保留协议兼容字段。 */
-    g_control_mode = frame->payload[0];
+    (void)frame->payload[0];
     return ACK_OK;
 
   default:
@@ -707,9 +728,9 @@ static HostProtocol_AckResult_t HostProtocol_HandleSafety(const HostProtocol_Fra
 {
   switch (frame->cmd_id)
   {
-  case 0x01U:
+  case HOST_PROTOCOL_CMD_SAFETY_ESTOP:
     /* SAFETY_ESTOP：锁定安全状态并立即停车。 */
-    if (frame->payload_len != 1U)
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_FLAG)
     {
       return ACK_BAD_LENGTH;
     }
@@ -717,12 +738,11 @@ static HostProtocol_AckResult_t HostProtocol_HandleSafety(const HostProtocol_Fra
     g_safety_latched = 1U;
     HostProtocol_StopMotion(1U);
     AdvanceArm_EStop();
-    g_control_mode = HOST_CONTROL_SAFETY_LOCKED;
     return ACK_OK;
 
-  case 0x02U:
+  case HOST_PROTOCOL_CMD_SAFETY_STOP:
     /* SAFETY_SAFE_STOP：mode=0 平滑停止，mode=1 立即停止。 */
-    if (frame->payload_len != 1U)
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_FLAG)
     {
       return ACK_BAD_LENGTH;
     }
@@ -740,9 +760,9 @@ static HostProtocol_AckResult_t HostProtocol_HandleSafety(const HostProtocol_Fra
     }
     return ACK_OK;
 
-  case 0x03U:
+  case HOST_PROTOCOL_CMD_SAFETY_CLEAR:
     /* SAFETY_CLEAR：清除可恢复安全锁定，后续普通底盘命令可继续执行。 */
-    if (frame->payload_len != 0U)
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE)
     {
       return ACK_BAD_LENGTH;
     }
@@ -783,17 +803,17 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
   WorldGoalPose2D_t goal;
 
   if ((HostProtocol_IsControlAllowed() == 0U) &&
-      (frame->cmd_id != 0x08U) &&
-      (frame->cmd_id != 0x0BU))
+      (frame->cmd_id != HOST_PROTOCOL_CMD_CHASSIS_CANCEL_GOAL) &&
+      (frame->cmd_id != HOST_PROTOCOL_CMD_CHASSIS_GET_MOTION_STATUS))
   {
     return ACK_DENIED;
   }
 
   switch (frame->cmd_id)
   {
-  case 0x01U:
+  case HOST_PROTOCOL_CMD_CHASSIS_ENABLE:
     /* CHASSIS_ENABLE：Payload[0] = 0 禁用，1 使能。 */
-    if (frame->payload_len != 1U)
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_FLAG)
     {
       return ACK_BAD_LENGTH;
     }
@@ -808,9 +828,9 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     Chassis_Enable(frame->payload[0] != 0U);
     return ACK_OK;
 
-  case 0x02U:
+  case HOST_PROTOCOL_CMD_CHASSIS_STOP:
     /* CHASSIS_STOP：Payload[0] = 0 平滑停止，1 立即停止。 */
-    if (frame->payload_len != 1U)
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_FLAG)
     {
       return ACK_BAD_LENGTH;
     }
@@ -828,13 +848,13 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     }
     return ACK_OK;
 
-  case 0x03U:
+  case HOST_PROTOCOL_CMD_CHASSIS_SET_RPM:
     /*
      * CHASSIS_SET_MOTOR_RPM：
      *   lf_rpm, rf_rpm, lr_rpm, rr_rpm 为 int16_t 小端，单位 RPM。
      *   acc 为 Emm 加速度参数。
      */
-    if (frame->payload_len != 9U)
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_CHASSIS_RPM)
     {
       return ACK_BAD_LENGTH;
     }
@@ -849,18 +869,18 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     {
       return ACK_BAD_PARAM;
     }
-    HostProtocol_SelectMotionMode(HOST_CONTROL_MOTOR_RPM);
+    AdvanceMotion_CancelIfActive();
     Chassis_SetMotorRPMEx(lf_rpm, rf_rpm, lr_rpm, rr_rpm, frame->payload[8]);
     return ACK_OK;
 
-  case 0x04U:
+  case HOST_PROTOCOL_CMD_CHASSIS_MECANUM:
     /*
      * CHASSIS_MOVE_MECANUM：
      *   forward_rpm > 0 前进
      *   strafe_rpm  > 0 右平移
-     *   rotate_rpm  > 0 右旋
+     *   rotate_rpm  > 0 逆时针旋转，< 0 顺时针旋转
      */
-    if (frame->payload_len != 7U)
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_CHASSIS_VELOCITY)
     {
       return ACK_BAD_LENGTH;
     }
@@ -873,16 +893,16 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     {
       return ACK_BAD_PARAM;
     }
-    HostProtocol_SelectMotionMode(HOST_CONTROL_MECANUM);
+    AdvanceMotion_CancelIfActive();
     Chassis_MoveMecanumEx(forward_rpm, strafe_rpm, rotate_rpm, frame->payload[6]);
     return ACK_OK;
 
-  case 0x05U:
+  case HOST_PROTOCOL_CMD_CHASSIS_BODY_VELOCITY:
     /*
      * CHASSIS_SET_BODY_VELOCITY:
      *   vx_mm_s > 0 right, vy_mm_s > 0 forward, wz_cdeg_s > 0 counter-clockwise.
      */
-    if (frame->payload_len != 7U)
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_CHASSIS_VELOCITY)
     {
       return ACK_BAD_LENGTH;
     }
@@ -895,16 +915,16 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     {
       return ACK_BAD_PARAM;
     }
-    HostProtocol_SelectMotionMode(HOST_CONTROL_BODY_VELOCITY);
+    AdvanceMotion_CancelIfActive();
     Chassis_SetBodyVelocityEx((float)vx_mm_s, (float)vy_mm_s, ((float)wz_cdeg_s) / 100.0f, frame->payload[6]);
     return ACK_OK;
 
-  case 0x06U:
+  case HOST_PROTOCOL_CMD_CHASSIS_WORLD_VELOCITY:
     /*
      * CHASSIS_SET_WORLD_VELOCITY:
      *   vx/vy use world axes; wz_cdeg_s > 0 counter-clockwise.
      */
-    if (frame->payload_len != 7U)
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_CHASSIS_VELOCITY)
     {
       return ACK_BAD_LENGTH;
     }
@@ -917,7 +937,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     {
       return ACK_BAD_PARAM;
     }
-    HostProtocol_SelectMotionMode(HOST_CONTROL_WORLD_VELOCITY);
+    AdvanceMotion_CancelIfActive();
     motion_status = AdvanceMotion_SetWorldVelocityEx(
         (float)vx_mm_s,
         (float)vy_mm_s,
@@ -925,12 +945,12 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
         frame->payload[6]);
     return (motion_status == ADVANCE_MOTION_STATUS_OK) ? ACK_OK : ACK_DENIED;
 
-  case 0x07U:
+  case HOST_PROTOCOL_CMD_CHASSIS_GOTO_POSE:
     /*
      * CHASSIS_GOTO_POSE:
      *   x_mm, y_mm, yaw_cdeg, vmax_mm_s, wmax_cdeg_s, timeout_ms, flags, acc.
      */
-    if (frame->payload_len != 22U)
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_GOTO_POSE)
     {
       return ACK_BAD_LENGTH;
     }
@@ -950,7 +970,6 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     goal.wmax_deg_s = ((float)wmax_cdeg_s) / 100.0f;
     goal.timeout_ms = timeout_ms;
     goal.goal_flags = goal_flags;
-    HostProtocol_SelectMotionMode(HOST_CONTROL_GOTO_POSE);
     motion_status = AdvanceMotion_GotoPoseEx(&goal, acc);
     if (motion_status == ADVANCE_MOTION_STATUS_OK)
     {
@@ -958,26 +977,26 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
     }
     return (motion_status == ADVANCE_MOTION_STATUS_INVALID_PARAM) ? ACK_BAD_PARAM : ACK_DENIED;
 
-  case 0x08U:
+  case HOST_PROTOCOL_CMD_CHASSIS_CANCEL_GOAL:
     /* CHASSIS_CANCEL_GOAL: no payload. */
-    if (frame->payload_len != 0U)
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE)
     {
       return ACK_BAD_LENGTH;
     }
     HostProtocol_StopMotion(0U);
     return ACK_OK;
 
-  case 0x09U:
+  case HOST_PROTOCOL_CMD_CHASSIS_RESET_ORIGIN:
     /* CHASSIS_RESET_WORLD_ORIGIN: no payload. */
-    if (frame->payload_len != 0U)
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE)
     {
       return ACK_BAD_LENGTH;
     }
     return (AdvanceWorld_ResetOrigin() == ADVANCE_WORLD_STATUS_OK) ? ACK_OK : ACK_DENIED;
 
-  case 0x0BU:
+  case HOST_PROTOCOL_CMD_CHASSIS_GET_MOTION_STATUS:
     /* CHASSIS_GET_MOTION_STATUS: ACK first, then MSG_DATA with the status payload. */
-    return (frame->payload_len == 0U) ? ACK_OK : ACK_BAD_LENGTH;
+    return (frame->payload_len == HOST_PROTOCOL_PAYLOAD_LEN_NONE) ? ACK_OK : ACK_BAD_LENGTH;
 
   default:
     return ACK_UNKNOWN_CMD;
@@ -991,21 +1010,18 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
   AdvanceArm_Config_t config;
   AdvanceArm_TaskPlan_t plan;
 
-  if (HostProtocol_IsControlAllowed() == 0U)
+  g_arm_ack_detail = 0U;
+  if ((frame->cmd_id != HOST_PROTOCOL_CMD_ARM_GET_STATUS) &&
+      (HostProtocol_IsControlAllowed() == 0U))
   {
     return ACK_DENIED;
   }
 
-  g_arm_ack_detail = 0U;
-
   switch (frame->cmd_id)
   {
-  case 0x10U:
-    /*
-     * ARM_GRAB：所有与实车标定相关的参数由命令携带，避免 advance_arm
-     * 内部固化舵机 ID、开合位置、加速度和速度。
-     */
-    if (frame->payload_len != 14U)
+  case HOST_PROTOCOL_CMD_ARM_GRAB:
+    if ((frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_FLAG) &&
+        (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_ARM_GRAB_LEGACY))
     {
       return ACK_BAD_LENGTH;
     }
@@ -1013,16 +1029,23 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
     {
       return ACK_BAD_PARAM;
     }
-    arm_status = AdvanceArm_Grab(frame->payload[1], frame->payload[0] != 0U,
-                                 HostProtocol_ReadI32(&frame->payload[2]),
-                                 HostProtocol_ReadI32(&frame->payload[6]),
-                                 HostProtocol_ReadU16(&frame->payload[10]),
-                                 HostProtocol_ReadU16(&frame->payload[12]));
+    arm_status = (frame->payload_len == HOST_PROTOCOL_PAYLOAD_LEN_FLAG)
+                     ? AdvanceArm_Grab(frame->payload[0] != 0U)
+                     : ((AdvanceArm_SetServo(frame->payload[1],
+                                             HostProtocol_ReadU16(&frame->payload[10]),
+                                             (frame->payload[0] != 0U)
+                                                 ? HostProtocol_ReadI32(&frame->payload[6])
+                                                 : HostProtocol_ReadI32(&frame->payload[2]),
+                                             HostProtocol_ReadU16(&frame->payload[12])) == drive_bus_servo_STATUS_OK)
+                            ? ADVANCE_ARM_STATUS_OK
+                            : ADVANCE_ARM_STATUS_FAULT);
+    g_arm_ack_detail = (uint8_t)arm_status;
     return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ACK_FAULT;
 
-  case 0x11U:
-    /* ARM_CONFIG：lift_id, swing_id, gripper_id, 两方向, 两速度, 两加速度, 位置容差。 */
-    if ((frame->payload_len != 13U) || (frame->payload[3] > 1U) || (frame->payload[4] > 1U))
+  case HOST_PROTOCOL_CMD_ARM_CONFIG:
+    /* 兼容旧客户端：仅接受与编译期固定配置完全一致的参数。 */
+    if ((frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_ARM_CONFIG) ||
+        (frame->payload[3] > 1U) || (frame->payload[4] > 1U))
     {
       return ACK_BAD_LENGTH;
     }
@@ -1041,30 +1064,50 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
     g_arm_ack_detail = (uint8_t)arm_status;
     return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ACK_DENIED;
 
-  case 0x12U:
-  case 0x13U:
-    /* ARM_PICK / ARM_PLACE：4 个位移、夹爪两位置、加速度速度、舵机等待和总超时。 */
-    if (frame->payload_len != 36U)
+  case HOST_PROTOCOL_CMD_ARM_PICK:
+  case HOST_PROTOCOL_CMD_ARM_PLACE:
+    if ((frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE) &&
+        (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_ARM_PLAN_LEGACY))
     {
       return ACK_BAD_LENGTH;
     }
-    HostProtocol_ReadArmPlan(frame->payload, &plan);
-    arm_status = AdvanceArm_StartLegacyTask(
-        (frame->cmd_id == 0x12U) ? ADVANCE_ARM_TASK_PICK : ADVANCE_ARM_TASK_PLACE,
-        &plan);
+    if (frame->payload_len == HOST_PROTOCOL_PAYLOAD_LEN_NONE)
+    {
+      arm_status = (frame->cmd_id == HOST_PROTOCOL_CMD_ARM_PICK)
+                       ? AdvanceArm_StartPick()
+                       : AdvanceArm_StartPlace();
+    }
+    else
+    {
+      HostProtocol_ReadArmPlan(frame->payload, &plan);
+      arm_status = AdvanceArm_StartLegacyTask(
+          (frame->cmd_id == HOST_PROTOCOL_CMD_ARM_PICK)
+              ? ADVANCE_ARM_TASK_PICK
+              : ADVANCE_ARM_TASK_PLACE,
+          &plan);
+    }
     g_arm_ack_detail = (uint8_t)arm_status;
     return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ((arm_status == ADVANCE_ARM_STATUS_INVALID_PARAM) ? ACK_BAD_PARAM : ACK_DENIED);
 
-  case 0x14U:
-    if (frame->payload_len != 0U)
+  case HOST_PROTOCOL_CMD_ARM_ABORT:
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE)
     {
       return ACK_BAD_LENGTH;
     }
     AdvanceArm_Abort();
     return ACK_OK;
 
-  case 0x15U:
-    return (frame->payload_len == 0U) ? ACK_OK : ACK_BAD_LENGTH;
+  case HOST_PROTOCOL_CMD_ARM_GET_STATUS:
+    return (frame->payload_len == HOST_PROTOCOL_PAYLOAD_LEN_NONE) ? ACK_OK : ACK_BAD_LENGTH;
+
+  case HOST_PROTOCOL_CMD_ARM_RESET_ZERO:
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    arm_status = AdvanceArm_ResetZero();
+    g_arm_ack_detail = (uint8_t)arm_status;
+    return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ACK_DENIED;
 
   default:
     return ACK_UNKNOWN_CMD;
@@ -1223,18 +1266,17 @@ void HostProtocol_Poll(void)
     if ((result == ACK_OK) &&
         (frame.msg_type == MSG_CMD) &&
         (frame.cmd_set == CMDSET_CHASSIS) &&
-        (frame.cmd_id == 0x0BU))
+        (frame.cmd_id == HOST_PROTOCOL_CMD_CHASSIS_GET_MOTION_STATUS))
     {
       HostProtocol_SendMotionStatusData(&frame);
     }
     if ((result == ACK_OK) && (frame.msg_type == MSG_CMD) &&
-        (frame.cmd_set == CMDSET_SERVO) && (frame.cmd_id == 0x15U))
+        (frame.cmd_set == CMDSET_SERVO) &&
+        (frame.cmd_id == HOST_PROTOCOL_CMD_ARM_GET_STATUS))
     {
       HostProtocol_SendArmStatusData(&frame);
     }
   }
-
-  (void)g_control_mode;
 }
 
 void HostProtocol_OnUartTxComplete(UART_HandleTypeDef *huart)
