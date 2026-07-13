@@ -117,12 +117,12 @@
 
 ### 4.7 PC / Jetson 通信
 
-- 文件：`Core/Inc/comm_pc.h`、`Core/Src/comm_pc.c`
+- 文件：`Core/Inc/comm_common.h`、`Core/Inc/comm_host.h`、`Core/Src/comm_host.c`
 - 用途：PC 和 Jetson 双路原始接收、日志输出和协议桥接。
 - PC：`USART1`，`115200 8N1`，`DMA Circular + UART 空闲中断`。
 - Jetson：`USART6`，`115200 8N1`，`DMA Circular + UART 空闲中断`。
-- `comm_pc.c` 会把原始字节输入 `comm_protocol.c`，用于后续上位机二进制协议解析。
-- 典型接口：`HostRx_InitPc()`、`HostRx_InitJetson()`、`HostRx_Poll()`、`HostRx_OnUartRxEvent()`。
+- `comm_host.c` 会把原始字节输入 `comm_protocol.c`，用于后续上位机二进制协议解析。
+- 典型接口：`HostComm_InitChannel()`、`HostComm_Poll()`、`HostComm_OnUartRxEvent()`。
 
 ### 4.8 Jetson 调试兼容层
 
@@ -130,14 +130,14 @@
 - 用途：保留 Jetson 原始接收调试兼容入口。
 - 当前建议：新通信逻辑优先进入 `comm_pc.*` 和 `comm_protocol.*`，避免再扩展独立调试分支。
 
-### 4.9 上位机协议层
+### 4.8 上位机协议层
 
 - 文件：`Core/Inc/comm_protocol.h`、`Core/Src/comm_protocol.c`
 - 用途：PC / Jetson 共用的二进制协议找帧、CRC 校验、命令队列、ACK 回发和主循环分发。
 - 当前边界：UART 回调只搬运原始字节，完整命令在 `HostProtocol_Poll()` 中执行。
 - 典型接口：`HostProtocol_RegisterSource()`、`HostProtocol_OnBytes()`、`HostProtocol_Poll()`。
 
-### 4.10 车辆状态视图
+### 4.9 车辆状态视图
 
 - 文件：`Core/Inc/car_pose.h`、`Core/Src/car_pose.c`
 - 用途：汇总车辆自身位姿相关数据指针，作为上层读取 IMU 和 OPS 数据的统一入口。

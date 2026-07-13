@@ -1,4 +1,4 @@
-﻿/* USER CODE BEGIN Header */
+/* USER CODE BEGIN Header */
 /**
  ******************************************************************************
  * @file           : main.c
@@ -30,7 +30,7 @@
 #include "advance_motion.h"
 #include "advance_world.h"
 #include "advance_arm.h"
-#include "comm_pc.h"
+#include "comm_host.h"
 #include "comm_protocol.h"
 #include "car_pose.h"
 
@@ -43,10 +43,18 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-/* 原点未建立时的非阻塞重试间隔；OPS 有效前不会建立原点。 */
-#define WORLD_ORIGIN_RETRY_MS ((uint32_t)1000U)
 /* 发布固件保持 0，避免 printf 的逐字节阻塞影响控制周期。 */
 #define DEBUG_UART_ENABLE (0U)
+
+/* TIM6 提供 1 ms 调度节拍，所有业务周期统一在这里配置。 */
+#define APP_SCHEDULER_TICK_MS ((uint32_t)1U)
+#define APP_PROTOCOL_PERIOD_MS ((uint32_t)2U)
+#define APP_WORLD_PERIOD_MS ((uint32_t)10U)
+#define APP_SAFETY_PERIOD_MS ((uint32_t)10U)
+#define APP_MOTION_PERIOD_MS ((uint32_t)20U)
+#define APP_MOTOR_PERIOD_MS ((uint32_t)20U)
+#define APP_ORIGIN_PERIOD_MS ((uint32_t)1000U)
+#define APP_LED_PERIOD_MS ((uint32_t)500U)
 
 /* TIM6 仅置位这些任务，不在中断上下文执行业务逻辑。 */
 #define APP_TASK_PROTOCOL ((uint32_t)0x00000001U)
@@ -141,18 +149,9 @@ void testEmmV5Datou(uint8_t id)
   drive_emm_Stop_Now(id, false);
 }
 
-void situation_led()
+static void App_ToggleLed(void)
 {
-  // 状态指示灯：每 500ms 翻转一次 GPIO 状态
-  // 如果烧录成功并正常运行，可以看到板载 LED 闪烁
-  static uint32_t led_tick = 0;
-  if (HAL_GetTick() - led_tick >= 500)
-  {
-    led_tick = HAL_GetTick();
-    // 翻转 PF9 红色 LED 和 PF10 绿色 LED
-    HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_9);
-    HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_10);
-  }
+  HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_9 | GPIO_PIN_10);
 }
 
 void test() // 测试的东西全写在里面
@@ -188,7 +187,7 @@ static void App_SafetyCheck(void)
   if ((Chassis_IsMotionCommandActive() != 0U) &&
       (drive_emm_IsChassisFeedbackHealthy() == 0U))
   {
-    AdvanceMotion_CancelIfActive();
+    AdvanceMotion_CancelWithoutStop();
     Chassis_Stop();
   }
 }
@@ -197,7 +196,7 @@ static void App_RunScheduledTasks(uint32_t pending)
 {
   if ((pending & APP_TASK_PROTOCOL) != 0U)
   {
-    HostRx_Poll();
+    HostComm_Poll();
   }
 
   if ((pending & APP_TASK_WORLD) != 0U)
@@ -231,7 +230,7 @@ static void App_RunScheduledTasks(uint32_t pending)
 
   if ((pending & APP_TASK_LED) != 0U)
   {
-    situation_led();
+    App_ToggleLed();
   }
 }
 
@@ -284,26 +283,26 @@ int main(void)
   CarPose_Init();
   AdvanceWorld_Init();
   AdvanceMotion_Init();
-  AdvanceArm_Init();
   (void)drive_emm_Init();
   drive_emm_ConfigureChassisFeedback(
       CHASSIS_MOTOR_LF_ID,
       CHASSIS_MOTOR_RF_ID,
       CHASSIS_MOTOR_LR_ID,
       CHASSIS_MOTOR_RR_ID);
+  AdvanceArm_Init();
 
   // 外设初始化
   BusServo_Init(&huart4);
 
   // 通信初始化
-  if (HostRx_InitPc(&huart1) != comm_pc_STATUS_OK)
+  if (HostComm_InitChannel(HOST_SOURCE_PC, &huart1) != HOST_COMM_STATUS_OK)
   {
-    printf("HostRx PC init failed\r\n");
+    printf("HostComm PC init failed\r\n");
   }
 
-  if (HostRx_InitJetson(&huart6) != comm_pc_STATUS_OK)
+  if (HostComm_InitChannel(HOST_SOURCE_JETSON, &huart6) != HOST_COMM_STATUS_OK)
   {
-    printf("HostRx Jetson init failed\r\n");
+    printf("HostComm Jetson init failed\r\n");
   }
 
   /* 原点建立由 1 s 调度任务重试，不阻塞等待 OPS 数据。 */
@@ -705,12 +704,12 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 
   if (huart->Instance == USART1)
   {
-    HostRx_OnUartRxEvent(huart, Size);
+    HostComm_OnUartRxEvent(huart, Size);
   }
 
   if (huart->Instance == USART6)
   {
-    HostRx_OnUartRxEvent(huart, Size);
+    HostComm_OnUartRxEvent(huart, Size);
   }
 }
 
@@ -756,12 +755,12 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 
   if (huart->Instance == USART6)
   {
-    HostRx_OnUartError(huart);
+    HostComm_OnUartError(huart);
   }
 
   if (huart->Instance == USART1)
   {
-    HostRx_OnUartError(huart);
+    HostComm_OnUartError(huart);
   }
 }
 
@@ -780,37 +779,37 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     return;
   }
 
-  if (++protocol_tick >= 2U)
+  if (++protocol_tick >= (APP_PROTOCOL_PERIOD_MS / APP_SCHEDULER_TICK_MS))
   {
     protocol_tick = 0U;
     g_app_pending_tasks |= APP_TASK_PROTOCOL;
   }
-  if (++world_tick >= 10U)
+  if (++world_tick >= (APP_WORLD_PERIOD_MS / APP_SCHEDULER_TICK_MS))
   {
     world_tick = 0U;
     g_app_pending_tasks |= APP_TASK_WORLD;
   }
-  if (++safety_tick >= 10U)
+  if (++safety_tick >= (APP_SAFETY_PERIOD_MS / APP_SCHEDULER_TICK_MS))
   {
     safety_tick = 0U;
     g_app_pending_tasks |= APP_TASK_SAFETY;
   }
-  if (++motion_tick >= 20U)
+  if (++motion_tick >= (APP_MOTION_PERIOD_MS / APP_SCHEDULER_TICK_MS))
   {
     motion_tick = 0U;
     g_app_pending_tasks |= APP_TASK_MOTION;
   }
-  if (++motor_tick >= 20U)
+  if (++motor_tick >= (APP_MOTOR_PERIOD_MS / APP_SCHEDULER_TICK_MS))
   {
     motor_tick = 0U;
     g_app_pending_tasks |= APP_TASK_MOTOR;
   }
-  if (++origin_tick >= WORLD_ORIGIN_RETRY_MS)
+  if (++origin_tick >= (APP_ORIGIN_PERIOD_MS / APP_SCHEDULER_TICK_MS))
   {
     origin_tick = 0U;
     g_app_pending_tasks |= APP_TASK_ORIGIN;
   }
-  if (++led_tick >= 500U)
+  if (++led_tick >= (APP_LED_PERIOD_MS / APP_SCHEDULER_TICK_MS))
   {
     led_tick = 0U;
     g_app_pending_tasks |= APP_TASK_LED;

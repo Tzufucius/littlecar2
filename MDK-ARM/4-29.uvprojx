@@ -427,14 +427,9 @@
               <FilePath>../Core/Src/sensor_wit.c</FilePath>
             </File>
             <File>
-              <FileName>comm_jetson.c</FileName>
+              <FileName>comm_host.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../Core/Src/comm_jetson.c</FilePath>
-            </File>
-            <File>
-              <FileName>comm_pc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../Core/Src/comm_pc.c</FilePath>
+              <FilePath>../Core/Src/comm_host.c</FilePath>
             </File>
             <File>
               <FileName>comm_protocol.c</FileName>

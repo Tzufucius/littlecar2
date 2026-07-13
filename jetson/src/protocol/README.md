@@ -25,6 +25,7 @@ from protocol import Car
 
 with Car(port="COM8", baudrate=115200) as car:
     car.system.ping()
+    car.system.claim_control()
     car.heartbeat.start()
     car.safety.clear()
     car.chassis.enable(True)
@@ -45,7 +46,8 @@ car.system.ping()
 
 - `car.system.ping()`：发送 `SYS_PING`，等待 ACK。
 - `car.system.heartbeat()`：发送 `SYS_HEARTBEAT`，Payload 为当前上位机毫秒时间。
-- `car.system.set_mode(mode)`：发送 `SYS_SET_MODE`。
+- `car.system.claim_control()`：申请控制权租约；成功后才可发送运动和机械臂动作。
+- `car.system.release_control()`：立即停车并释放控制权租约。
 - `car.safety.estop(source=0)`：发送急停命令。
 - `car.safety.safe_stop(mode=0)`：发送安全停止命令，`0` 为平滑停止，`1` 为立即停止。
 - `car.safety.clear()`：清除可恢复安全状态。
@@ -58,6 +60,9 @@ car.system.ping()
 - `car.chassis.goto_pose(WorldGoal(...))` / `cancel_goal()`：下发或取消异步目标点。
 - `car.chassis.reset_world_origin()`：以当前有效传感器数据建立 world 原点。
 - `car.chassis.get_motion_status()`：查询异步目标状态，返回 `MotionStatus`。
+- `car.arm.grab()` / `release()`：控制固定标定的夹爪开合。
+- `car.arm.pick()` / `place()`：启动固定取放动作。
+- `car.arm.abort()` / `reset_zero()` / `get_status()`：停止、人工归零和查询机械臂状态。
 - `car.heartbeat.start()` / `stop()`：启动或停止默认 100 ms 的后台心跳服务。
 - `car.read_status(timeout=0.0)`：读取一帧周期 `MSG_STATUS`，无数据时返回 `None`。
 
@@ -69,4 +74,4 @@ car.system.ping()
 
 ## 当前限制
 
-当前 STM32 侧已实现 `SYSTEM`、`SAFETY` 和 `CHASSIS`，其中 `CHASSIS_GET_MOTION_STATUS` 会在 ACK 后返回 `MSG_DATA`。`SENSOR_GET_IMU`、`SENSOR_GET_OPS` 和周期 `MSG_STATUS` 尚未由 STM32 `comm_protocol.c` 分发；相关解析函数只作为后续协议扩展的内部预留，不能用于正式联动流程。
+当前 STM32 侧已实现 `SYSTEM`、`SAFETY`、`CHASSIS` 和固定配置的 `SERVO` 命令，其中状态查询会在 ACK 后返回 `MSG_DATA`。`SYS_SET_MODE` 为废弃兼容命令，Jetson 不再公开该接口。`SENSOR_GET_IMU`、`SENSOR_GET_OPS` 和周期 `MSG_STATUS` 尚未由 STM32 `comm_protocol.c` 分发；相关解析函数只作为后续协议扩展的内部预留，不能用于正式联动流程。

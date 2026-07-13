@@ -16,7 +16,6 @@ typedef struct
   float yaw_error_deg;
   uint32_t started_tick;
   uint32_t updated_tick;
-  uint32_t last_control_tick;
   uint32_t arrive_hold_start_tick;
   uint8_t arrival_stop_sent;
   uint8_t acc;
@@ -122,7 +121,10 @@ static void AdvanceMotion_SetTerminalState(AdvanceMotion_RunState_t state, uint8
 {
   g_motion.state = state;
   g_motion.updated_tick = HAL_GetTick();
-  Chassis_SmoothStop(stop_acc);
+  if ((state != ADVANCE_MOTION_STATE_ARRIVED) || (g_motion.arrival_stop_sent == 0U))
+  {
+    Chassis_SmoothStop(stop_acc);
+  }
 }
 
 static AdvanceMotion_Status_t AdvanceMotion_ApplyWorldVelocityEx(float vx_world_mm_s, float vy_world_mm_s, float wz_ccw_deg_s, uint8_t acc)
@@ -167,11 +169,6 @@ void AdvanceMotion_Init(void)
   g_motion.state = ADVANCE_MOTION_STATE_IDLE;
 }
 
-AdvanceMotion_Status_t AdvanceMotion_SetWorldVelocity(float vx_world_mm_s, float vy_world_mm_s, float wz_ccw_deg_s)
-{
-  return AdvanceMotion_SetWorldVelocityEx(vx_world_mm_s, vy_world_mm_s, wz_ccw_deg_s, CHASSIS_DEFAULT_ACC);
-}
-
 AdvanceMotion_Status_t AdvanceMotion_SetWorldVelocityEx(float vx_world_mm_s, float vy_world_mm_s, float wz_ccw_deg_s, uint8_t acc)
 {
   if (g_motion.state == ADVANCE_MOTION_STATE_RUNNING)
@@ -181,11 +178,6 @@ AdvanceMotion_Status_t AdvanceMotion_SetWorldVelocityEx(float vx_world_mm_s, flo
   }
 
   return AdvanceMotion_ApplyWorldVelocityEx(vx_world_mm_s, vy_world_mm_s, wz_ccw_deg_s, acc);
-}
-
-AdvanceMotion_Status_t AdvanceMotion_GotoPose(const WorldGoalPose2D_t *goal)
-{
-  return AdvanceMotion_GotoPoseEx(goal, CHASSIS_DEFAULT_ACC);
 }
 
 AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, uint8_t acc)
@@ -198,7 +190,6 @@ AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, u
   g_motion.goal = *goal;
   g_motion.started_tick = HAL_GetTick();
   g_motion.updated_tick = g_motion.started_tick;
-  g_motion.last_control_tick = 0U;
   g_motion.arrive_hold_start_tick = 0U;
   g_motion.arrival_stop_sent = 0U;
   g_motion.error_x_mm = 0.0f;
@@ -225,13 +216,6 @@ void AdvanceMotion_Poll(void)
   {
     return;
   }
-
-  if ((g_motion.last_control_tick != 0U) &&
-      ((now_tick - g_motion.last_control_tick) < ADVANCE_MOTION_CONTROL_PERIOD_MS))
-  {
-    return;
-  }
-  g_motion.last_control_tick = now_tick;
 
   if ((g_motion.goal.timeout_ms > 0U) &&
       ((now_tick - g_motion.started_tick) >= g_motion.goal.timeout_ms))
@@ -315,6 +299,17 @@ void AdvanceMotion_CancelIfActive(void)
   if (g_motion.state == ADVANCE_MOTION_STATE_RUNNING)
   {
     AdvanceMotion_Cancel();
+  }
+}
+
+void AdvanceMotion_CancelWithoutStop(void)
+{
+  if (g_motion.state == ADVANCE_MOTION_STATE_RUNNING)
+  {
+    g_motion.state = ADVANCE_MOTION_STATE_CANCELED;
+    g_motion.updated_tick = HAL_GetTick();
+    g_motion.arrive_hold_start_tick = 0U;
+    g_motion.arrival_stop_sent = 0U;
   }
 }
 

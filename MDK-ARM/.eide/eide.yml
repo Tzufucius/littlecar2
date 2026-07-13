@@ -28,8 +28,7 @@ virtualFolder:
                 - path: ../Core/Src/car_pose.c
                 - path: ../Core/Src/sensor_ops.c
                 - path: ../Core/Src/sensor_wit.c
-                - path: ../Core/Src/comm_jetson.c
-                - path: ../Core/Src/comm_pc.c
+                - path: ../Core/Src/comm_host.c
                 - path: ../Core/Src/comm_protocol.c
                 - path: ../Core/Src/advance_arm.c
                 - path: ../Core/Src/main.c
@@ -40,8 +39,8 @@ virtualFolder:
                 - path: ../Core/Inc/advance_motion.h
                 - path: ../Core/Inc/advance_world.h
                 - path: ../Core/Inc/car_pose.h
-                - path: ../Core/Inc/comm_jetson.h
-                - path: ../Core/Inc/comm_pc.h
+                - path: ../Core/Inc/comm_common.h
+                - path: ../Core/Inc/comm_host.h
                 - path: ../Core/Inc/comm_protocol.h
                 - path: ../Core/Inc/drive_bus_servo.h
                 - path: ../Core/Inc/drive_emm.h
