@@ -29,6 +29,8 @@ class SystemCmd(IntEnum):
     PING = 0x01
     HEARTBEAT = 0x02
     SET_MODE = 0x03
+    CLAIM_CONTROL = 0x04
+    RELEASE_CONTROL = 0x05
 
 
 class SafetyCmd(IntEnum):

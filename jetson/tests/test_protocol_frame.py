@@ -28,6 +28,14 @@ class ProtocolFrameTest(unittest.TestCase):
         self.assertEqual(len(raw), 11)
         self.assertEqual(int.from_bytes(raw[-2:], "little"), crc16_modbus(raw[2:-2]))
 
+    def test_control_lease_commands_have_empty_payloads(self):
+        for command in (SystemCmd.CLAIM_CONTROL, SystemCmd.RELEASE_CONTROL):
+            frame = unpack_frame(pack_frame(MsgType.CMD, CmdSet.SYSTEM, command, seq=1))
+
+            self.assertEqual(frame.cmd_set, CmdSet.SYSTEM)
+            self.assertEqual(frame.cmd_id, command)
+            self.assertEqual(frame.payload, b"")
+
     def test_ack_parse(self):
         payload = struct.pack("<HBB", 7, AckCode.OK, 0)
         frame = unpack_frame(pack_frame(MsgType.ACK, CmdSet.SYSTEM, SystemCmd.PING, 7, payload))

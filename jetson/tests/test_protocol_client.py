@@ -72,6 +72,8 @@ class ProtocolClientTest(unittest.TestCase):
         self.car.system.ping()
         self.car.system.heartbeat(1234)
         self.car.system.set_mode(2)
+        self.car.system.claim_control()
+        self.car.system.release_control()
         self.car.safety.estop(3)
         self.car.safety.safe_stop(0)
         self.car.safety.clear()
@@ -82,6 +84,8 @@ class ProtocolClientTest(unittest.TestCase):
                 (CmdSet.SYSTEM, 0x01),
                 (CmdSet.SYSTEM, 0x02),
                 (CmdSet.SYSTEM, 0x03),
+                (CmdSet.SYSTEM, 0x04),
+                (CmdSet.SYSTEM, 0x05),
                 (CmdSet.SAFETY, 0x01),
                 (CmdSet.SAFETY, 0x02),
                 (CmdSet.SAFETY, 0x03),

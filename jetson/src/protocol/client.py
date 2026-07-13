@@ -75,6 +75,12 @@ class SystemClient:
     def set_mode(self, mode: int) -> None:
         self._transport.send_command(CmdSet.SYSTEM, SystemCmd.SET_MODE, struct.pack("<B", mode))
 
+    def claim_control(self) -> None:
+        self._transport.send_command(CmdSet.SYSTEM, SystemCmd.CLAIM_CONTROL)
+
+    def release_control(self) -> None:
+        self._transport.send_command(CmdSet.SYSTEM, SystemCmd.RELEASE_CONTROL)
+
 
 class SafetyClient:
     def __init__(self, transport: SerialTransport) -> None:
