@@ -27,55 +27,55 @@ extern "C"
 #define CHASSIS_MOTOR_LR_SIGN (1)
 #define CHASSIS_MOTOR_RR_SIGN (1)
 
-#define CHASSIS_DEFAULT_ACC ((uint8_t)10U)
-#define CHASSIS_SYNC_ADDR ((uint8_t)0x00U)
-#define CHASSIS_MAX_RPM ((uint16_t)3000U)
-#define CHASSIS_UART_WAIT_TIMEOUT_MS ((uint32_t)20U)
+#define CHASSIS_DEFAULT_ACC ((uint8_t)10U) /*!< 底盘默认加速度参数。 */
+#define CHASSIS_SYNC_ADDR ((uint8_t)0x00U) /*!< 四轮同步控制地址。 */
+#define CHASSIS_MAX_RPM ((uint16_t)3000U) /*!< 底盘轮速上限，单位为 RPM。 */
+#define CHASSIS_UART_WAIT_TIMEOUT_MS ((uint32_t)20U) /*!< 串口发送等待超时时间，单位为 ms。 */
 
 /*
  * Body velocity axis convention:
  *   +X: right, +Y: forward, +WZ: counter-clockwise when viewed from above.
  * Change one sign to reverse that motion axis without touching control code.
  */
-#define CHASSIS_BODY_X_SIGN (1)
-#define CHASSIS_BODY_Y_SIGN (1)
-#define CHASSIS_BODY_WZ_SIGN (1)
+#define CHASSIS_BODY_X_SIGN (1) /*!< 车体 X 轴速度方向符号。 */
+#define CHASSIS_BODY_Y_SIGN (1) /*!< 车体 Y 轴速度方向符号。 */
+#define CHASSIS_BODY_WZ_SIGN (1) /*!< 车体角速度方向符号。 */
 
 /*
  * 物理速度接口的输入限值。超出时底盘层会钳制，协议层应同时拒绝异常命令。
  * 修改前应完成轮组方向、制动距离和场地边界验证。
  */
-#define CHASSIS_MAX_BODY_SPEED_MM_S (500.0f)
-#define CHASSIS_MAX_BODY_WZ_DEG_S (180.0f)
+#define CHASSIS_MAX_BODY_SPEED_MM_S (500.0f) /*!< 车体线速度上限，单位为 mm/s。 */
+#define CHASSIS_MAX_BODY_WZ_DEG_S (180.0f) /*!< 车体角速度上限，单位为度/s。 */
 
 /*
  * Physical chassis parameters for mm/s and deg/s conversion.
  * Measure and calibrate these values on the real chassis before high-speed use.
  */
-#define CHASSIS_WHEEL_RADIUS_MM (48.0f)
-#define CHASSIS_HALF_LENGTH_MM (110.0f)
-#define CHASSIS_HALF_WIDTH_MM (90.0f)
-#define CHASSIS_MOTOR_GEAR_RATIO (1.0f)
+#define CHASSIS_WHEEL_RADIUS_MM (48.0f) /*!< 车轮半径，单位为 mm。 */
+#define CHASSIS_HALF_LENGTH_MM (110.0f) /*!< 车体半长，单位为 mm。 */
+#define CHASSIS_HALF_WIDTH_MM (90.0f) /*!< 车体半宽，单位为 mm。 */
+#define CHASSIS_MOTOR_GEAR_RATIO (1.0f) /*!< 电机与车轮传动比。 */
 
 /*
  * 各运动动作的平滑移动预设参数。
  * acc 越大响应越快；acc 越小启动和变速越平滑。
  */
-#define CHASSIS_FORWARD_PRESET_RPM ((uint16_t)100U)
-#define CHASSIS_FORWARD_PRESET_ACC ((uint8_t)10U)
-#define CHASSIS_BACKWARD_PRESET_RPM ((uint16_t)100U)
-#define CHASSIS_BACKWARD_PRESET_ACC ((uint8_t)10U)
-#define CHASSIS_STRAFE_PRESET_RPM ((uint16_t)100U)
-#define CHASSIS_STRAFE_PRESET_ACC ((uint8_t)10U)
-#define CHASSIS_ROTATE_PRESET_RPM ((uint16_t)80U)
-#define CHASSIS_ROTATE_PRESET_ACC ((uint8_t)8U)
-#define CHASSIS_DIFF_LEFT_PRESET_RPM ((int16_t)80)
-#define CHASSIS_DIFF_RIGHT_PRESET_RPM ((int16_t)120)
-#define CHASSIS_DIFF_PRESET_ACC ((uint8_t)8U)
-#define CHASSIS_MECANUM_FORWARD_PRESET_RPM ((int16_t)80)
-#define CHASSIS_MECANUM_STRAFE_PRESET_RPM ((int16_t)0)
-#define CHASSIS_MECANUM_ROTATE_PRESET_RPM ((int16_t)0)
-#define CHASSIS_MECANUM_PRESET_ACC ((uint8_t)8U)
+#define CHASSIS_FORWARD_PRESET_RPM ((uint16_t)100U) /*!< 前进预设轮速，单位为 RPM。 */
+#define CHASSIS_FORWARD_PRESET_ACC ((uint8_t)10U) /*!< 前进预设加速度。 */
+#define CHASSIS_BACKWARD_PRESET_RPM ((uint16_t)100U) /*!< 后退预设轮速，单位为 RPM。 */
+#define CHASSIS_BACKWARD_PRESET_ACC ((uint8_t)10U) /*!< 后退预设加速度。 */
+#define CHASSIS_STRAFE_PRESET_RPM ((uint16_t)100U) /*!< 平移预设轮速，单位为 RPM。 */
+#define CHASSIS_STRAFE_PRESET_ACC ((uint8_t)10U) /*!< 平移预设加速度。 */
+#define CHASSIS_ROTATE_PRESET_RPM ((uint16_t)80U) /*!< 原地旋转预设轮速，单位为 RPM。 */
+#define CHASSIS_ROTATE_PRESET_ACC ((uint8_t)8U) /*!< 原地旋转预设加速度。 */
+#define CHASSIS_DIFF_LEFT_PRESET_RPM ((int16_t)80) /*!< 差速左侧预设轮速，单位为 RPM。 */
+#define CHASSIS_DIFF_RIGHT_PRESET_RPM ((int16_t)120) /*!< 差速右侧预设轮速，单位为 RPM。 */
+#define CHASSIS_DIFF_PRESET_ACC ((uint8_t)8U) /*!< 差速转向预设加速度。 */
+#define CHASSIS_MECANUM_FORWARD_PRESET_RPM ((int16_t)80) /*!< 麦克纳姆前进预设速度，单位为 RPM。 */
+#define CHASSIS_MECANUM_STRAFE_PRESET_RPM ((int16_t)0) /*!< 麦克纳姆平移预设速度，单位为 RPM。 */
+#define CHASSIS_MECANUM_ROTATE_PRESET_RPM ((int16_t)0) /*!< 麦克纳姆旋转预设速度，单位为 RPM。 */
+#define CHASSIS_MECANUM_PRESET_ACC ((uint8_t)8U) /*!< 麦克纳姆运动预设加速度。 */
 
     /*
      * 使能或失能四个底盘电机。

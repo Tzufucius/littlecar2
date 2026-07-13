@@ -16,13 +16,13 @@ extern "C"
    * 速度：0-3400
    *  */
 
-#define drive_bus_servo_BROADCAST_ID ((uint8_t)0xFE)
-#define drive_bus_servo_DEFAULT_ACCELERATION ((uint16_t)1500U)
-#define drive_bus_servo_DEFAULT_SPEED ((uint16_t)2000U)
-#define drive_bus_servo_MIN_ID ((uint8_t)0x00)
-#define drive_bus_servo_MAX_ID ((uint8_t)0xFD)
-#define drive_bus_servo_MAX_POSITION ((int32_t)0x7FFF)
-#define drive_bus_servo_MIN_POSITION ((int32_t)-0x7FFF)
+#define drive_bus_servo_BROADCAST_ID ((uint8_t)0xFE) /*!< 舵机广播地址。 */
+#define drive_bus_servo_DEFAULT_ACCELERATION ((uint16_t)1500U) /*!< 默认加速度参数。 */
+#define drive_bus_servo_DEFAULT_SPEED ((uint16_t)2000U) /*!< 默认速度参数。 */
+#define drive_bus_servo_MIN_ID ((uint8_t)0x00) /*!< 最小舵机 ID。 */
+#define drive_bus_servo_MAX_ID ((uint8_t)0xFD) /*!< 最大舵机 ID。 */
+#define drive_bus_servo_MAX_POSITION ((int32_t)0x7FFF) /*!< 允许的最大位置值。 */
+#define drive_bus_servo_MIN_POSITION ((int32_t)-0x7FFF) /*!< 允许的最小位置值。 */
 
   typedef enum
   {
@@ -33,20 +33,22 @@ extern "C"
     drive_bus_servo_STATUS_RX_ERROR
   } BusServo_Status_t;
 
+  /** @brief 舵机位置控制命令。 */
   typedef struct
   {
-    uint8_t id;
-    uint16_t acceleration;
-    int32_t position;
-    uint16_t speed;
+    uint8_t id; /*!< 舵机 ID。 */
+    uint16_t acceleration; /*!< 加速度参数。 */
+    int32_t position; /*!< 目标位置。 */
+    uint16_t speed; /*!< 目标速度。 */
   } BusServo_Command_t;
 
   /* 首版仅提供缓存接口；待接入实际回读协议后由接收层填充。 */
+  /** @brief 舵机反馈位置及有效性信息。 */
   typedef struct
   {
-    int32_t actual_position;
-    uint8_t valid;
-    uint32_t updated_tick;
+    int32_t actual_position; /*!< 实际位置。 */
+    uint8_t valid; /*!< 反馈有效标志：1-有效，0-无效。 */
+    uint32_t updated_tick; /*!< 反馈更新时间，单位为 ms。 */
   } BusServo_Feedback_t;
 
   /**
@@ -119,7 +121,9 @@ extern "C"
    * @retval 最近一次状态码。
    */
   BusServo_Status_t BusServo_GetLastStatus(void);
+  /** @brief 获取指定舵机反馈。 @param id 舵机 ID。 @param feedback 输出反馈结构体。 @return 获取结果状态。 */
   BusServo_Status_t BusServo_GetFeedback(uint8_t id, BusServo_Feedback_t *feedback);
+  /** @brief 判断舵机是否在容差和超时时间内到达目标。 @param id 舵机 ID。 @param target_position 目标位置。 @param tolerance 位置容差。 @param timeout_ms 超时时间，单位为 ms。 @return 1-已到达，0-未到达。 */
   uint8_t BusServo_IsReached(uint8_t id, int32_t target_position, int32_t tolerance,
                              uint32_t timeout_ms);
 
