@@ -12,11 +12,12 @@ extern "C"
 /*
  * OPS 帧有效性门限。按实际场地、定位刷新率和最高车速标定；超限帧不会覆盖上一帧。
  */
-#define OPS_MAX_ABS_POSITION_MM (10000.0f)
-#define OPS_MAX_ABS_ANGLE_DEG (720.0f)
-#define OPS_MAX_ABS_WZ_DPS (720.0f)
-#define OPS_MAX_POSITION_JUMP_MM (1000.0f)
+#define OPS_MAX_ABS_POSITION_MM (10000.0f) /*!< 允许的绝对位置上限，单位为 mm。 */
+#define OPS_MAX_ABS_ANGLE_DEG (720.0f) /*!< 允许的绝对角度上限，单位为度。 */
+#define OPS_MAX_ABS_WZ_DPS (720.0f) /*!< 允许的绝对角速度上限，单位为度/s。 */
+#define OPS_MAX_POSITION_JUMP_MM (1000.0f) /*!< 相邻有效帧允许的最大位置跳变，单位为 mm。 */
 
+  /** @brief OPS 传感器处理状态。 */
   typedef enum
   {
     OPS_STATUS_OK = 0,
@@ -71,7 +72,9 @@ extern "C"
   /**
    * @brief 获取完整的位姿结构体
    */
+  /** @brief 获取 OPS 位姿数据副本。 @param pose 输出位姿结构体指针。 @return 获取结果状态。 */
   OPS_Status_t OPS_GetPose(OPS_Pose_t *pose);
+  /** @brief 获取 OPS 位姿数据只读引用。 @return 当前位姿数据指针。 */
   const volatile OPS_Pose_t *OPS_GetPoseRef(void);
 
 #ifdef __cplusplus

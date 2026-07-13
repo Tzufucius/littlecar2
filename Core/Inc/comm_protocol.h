@@ -11,14 +11,14 @@ extern "C"
 
   typedef enum
   {
-    comm_protocol_SOURCE_PC = 0,
+    comm_protocol_SOURCE_PC = 0, /*!< PC 命令来源。 */
     comm_protocol_SOURCE_JETSON,
     comm_protocol_SOURCE_COUNT
   } HostProtocol_Source_t;
 
   typedef enum
   {
-    comm_protocol_STATUS_OK = 0,
+    comm_protocol_STATUS_OK = 0, /*!< 处理成功。 */
     comm_protocol_STATUS_INVALID_PARAM,
     comm_protocol_STATUS_OVERFLOW,
     comm_protocol_STATUS_TX_TIMEOUT
@@ -51,12 +51,17 @@ extern "C"
    * - 分发到 SYSTEM / SAFETY / CHASSIS 处理函数。
    * - 回发 ACK。
    */
+  /** @brief 在主循环中轮询执行协议命令和心跳检查。 */
   void HostProtocol_Poll(void);
   /* UART TX 完成与错误回调入口，用于释放协议异步发送队列。 */
+  /** @brief 处理协议串口发送完成回调。 @param huart 串口句柄。 */
   void HostProtocol_OnUartTxComplete(UART_HandleTypeDef *huart);
+  /** @brief 处理协议串口错误回调。 @param huart 串口句柄。 */
   void HostProtocol_OnUartError(UART_HandleTypeDef *huart);
 
+  /** @brief 获取最近一次协议处理状态。 @return 最近一次状态码。 */
   HostProtocol_Status_t HostProtocol_GetLastStatus(void);
+  /** @brief 获取异步发送超时累计次数。 @return 超时次数。 */
   uint32_t HostProtocol_GetTxTimeoutCount(void);
 
 #ifdef __cplusplus

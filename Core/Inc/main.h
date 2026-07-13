@@ -50,6 +50,7 @@ extern "C" {
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
+/** @brief 处理系统级不可恢复错误。 */
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */

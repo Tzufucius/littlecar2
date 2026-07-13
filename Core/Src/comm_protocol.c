@@ -99,27 +99,24 @@ typedef struct
   uint8_t data[comm_protocol_MAX_FRAME_LEN];
 } HostProtocol_TxItem_t;
 
-static UART_HandleTypeDef *g_comm_protocol_uart[comm_protocol_SOURCE_COUNT] = {0};
-static HostProtocol_Parser_t g_comm_protocol_parser[comm_protocol_SOURCE_COUNT] = {0};
-static volatile uint8_t g_queue_head = 0U;
-static volatile uint8_t g_queue_tail = 0U;
-static volatile uint8_t g_queue_count = 0U;
-static HostProtocol_Frame_t g_queue[comm_protocol_QUEUE_SIZE] = {0};
-static HostProtocol_Status_t g_last_status = comm_protocol_STATUS_OK;
-static uint32_t g_last_heartbeat_tick = 0U;
-static uint8_t g_heartbeat_seen = 0U;
-static uint8_t g_heartbeat_online = 0U;
-static uint8_t g_safety_latched = 0U;
-static uint8_t g_control_mode = 0U;
-static HostProtocol_TxItem_t g_tx_queue[comm_protocol_TX_QUEUE_SIZE] = {0};
-static volatile uint8_t g_tx_head = 0U;
-static volatile uint8_t g_tx_tail = 0U;
-static volatile uint8_t g_tx_count = 0U;
-static volatile uint8_t g_tx_active = 0U;
-static volatile uint32_t g_tx_started_tick = 0U;
-static volatile uint32_t g_tx_timeout_count = 0U;
-/* 机械臂命令失败时写入 ACK detail，供上位机区分未置零、忙碌和故障。 */
-static uint8_t g_arm_ack_detail = 0U;
+typedef struct
+{
+  HostProtocol_Frame_t data[comm_protocol_QUEUE_SIZE];
+  volatile uint8_t head;
+  volatile uint8_t tail;
+  volatile uint8_t count;
+} HostProtocol_RxQueue_t;
+
+typedef struct
+{
+  HostProtocol_TxItem_t data[comm_protocol_TX_QUEUE_SIZE];
+  volatile uint8_t head;
+  volatile uint8_t tail;
+  volatile uint8_t count;
+  volatile uint8_t active;
+  volatile uint32_t started_tick;
+  volatile uint32_t timeout_count;
+} HostProtocol_TxQueue_t;
 
 typedef enum
 {
@@ -131,6 +128,19 @@ typedef enum
   HOST_CONTROL_GOTO_POSE,
   HOST_CONTROL_SAFETY_LOCKED
 } HostProtocol_ControlMode_t;
+
+static UART_HandleTypeDef *g_comm_protocol_uart[comm_protocol_SOURCE_COUNT] = {0};
+static HostProtocol_Parser_t g_comm_protocol_parser[comm_protocol_SOURCE_COUNT] = {0};
+static HostProtocol_RxQueue_t g_rx_queue = {0};
+static HostProtocol_Status_t g_last_status = comm_protocol_STATUS_OK;
+static uint32_t g_last_heartbeat_tick = 0U;
+static uint8_t g_heartbeat_seen = 0U;
+static uint8_t g_heartbeat_online = 0U;
+static uint8_t g_safety_latched = 0U;
+static HostProtocol_ControlMode_t g_control_mode = HOST_CONTROL_IDLE;
+static HostProtocol_TxQueue_t g_tx_queue = {0};
+/* 机械臂命令失败时写入 ACK detail，供上位机区分未置零、忙碌和故障。 */
+static uint8_t g_arm_ack_detail = 0U;
 
 static void HostProtocol_StopMotion(uint8_t immediate)
 {
@@ -152,7 +162,7 @@ static void HostProtocol_SelectMotionMode(HostProtocol_ControlMode_t mode)
   {
     AdvanceMotion_CancelIfActive();
   }
-  g_control_mode = (uint8_t)mode;
+  g_control_mode = mode;
 }
 
 static uint32_t HostProtocol_GetTxTimeoutMs(const HostProtocol_TxItem_t *item)
@@ -176,22 +186,22 @@ static void HostProtocol_StartNextTx(void)
 {
   HAL_StatusTypeDef status;
 
-  if ((g_tx_active != 0U) || (g_tx_count == 0U))
+  if ((g_tx_queue.active != 0U) || (g_tx_queue.count == 0U))
   {
     return;
   }
 
-  g_tx_active = 1U;
-  status = HAL_UART_Transmit_IT(g_tx_queue[g_tx_tail].huart,
-                                g_tx_queue[g_tx_tail].data,
-                                g_tx_queue[g_tx_tail].length);
+  g_tx_queue.active = 1U;
+  status = HAL_UART_Transmit_IT(g_tx_queue.data[g_tx_queue.tail].huart,
+                                g_tx_queue.data[g_tx_queue.tail].data,
+                                g_tx_queue.data[g_tx_queue.tail].length);
   if (status == HAL_OK)
   {
-    g_tx_started_tick = HAL_GetTick();
+    g_tx_queue.started_tick = HAL_GetTick();
   }
   else
   {
-    g_tx_active = 0U;
+    g_tx_queue.active = 0U;
     g_last_status = comm_protocol_STATUS_OVERFLOW;
   }
 }
@@ -203,14 +213,14 @@ static void HostProtocol_RecoverTxTimeout(void)
 
   now = HAL_GetTick();
   __disable_irq();
-  if ((g_tx_active == 0U) || (g_tx_count == 0U))
+  if ((g_tx_queue.active == 0U) || (g_tx_queue.count == 0U))
   {
     __enable_irq();
     return;
   }
 
-  item = &g_tx_queue[g_tx_tail];
-  if ((now - g_tx_started_tick) <= HostProtocol_GetTxTimeoutMs(item))
+  item = &g_tx_queue.data[g_tx_queue.tail];
+  if ((now - g_tx_queue.started_tick) <= HostProtocol_GetTxTimeoutMs(item))
   {
     __enable_irq();
     return;
@@ -218,18 +228,18 @@ static void HostProtocol_RecoverTxTimeout(void)
 
   /* 当前发送使用中断模式，AbortTransmit 会停止 TX 中断并恢复 UART READY 状态。 */
   (void)HAL_UART_AbortTransmit(item->huart);
-  ++g_tx_timeout_count;
+  ++g_tx_queue.timeout_count;
   g_last_status = comm_protocol_STATUS_TX_TIMEOUT;
-  g_tx_active = 0U;
-  g_tx_started_tick = 0U;
+  g_tx_queue.active = 0U;
+  g_tx_queue.started_tick = 0U;
   if (item->retry_count < comm_protocol_TX_MAX_RETRIES)
   {
     ++item->retry_count;
   }
   else
   {
-    g_tx_tail = (uint8_t)((g_tx_tail + 1U) % comm_protocol_TX_QUEUE_SIZE);
-    --g_tx_count;
+    g_tx_queue.tail = (uint8_t)((g_tx_queue.tail + 1U) % comm_protocol_TX_QUEUE_SIZE);
+    --g_tx_queue.count;
   }
   __enable_irq();
 
@@ -248,19 +258,19 @@ static void HostProtocol_QueueTx(UART_HandleTypeDef *huart, const uint8_t *data,
   }
 
   __disable_irq();
-  if (g_tx_count >= comm_protocol_TX_QUEUE_SIZE)
+  if (g_tx_queue.count >= comm_protocol_TX_QUEUE_SIZE)
   {
     __enable_irq();
     g_last_status = comm_protocol_STATUS_OVERFLOW;
     return;
   }
-  slot = g_tx_head;
-  g_tx_queue[slot].huart = huart;
-  g_tx_queue[slot].length = length;
-  g_tx_queue[slot].retry_count = 0U;
-  memcpy(g_tx_queue[slot].data, data, length);
-  g_tx_head = (uint8_t)((slot + 1U) % comm_protocol_TX_QUEUE_SIZE);
-  ++g_tx_count;
+  slot = g_tx_queue.head;
+  g_tx_queue.data[slot].huart = huart;
+  g_tx_queue.data[slot].length = length;
+  g_tx_queue.data[slot].retry_count = 0U;
+  memcpy(g_tx_queue.data[slot].data, data, length);
+  g_tx_queue.head = (uint8_t)((slot + 1U) % comm_protocol_TX_QUEUE_SIZE);
+  ++g_tx_queue.count;
   __enable_irq();
 
   HostProtocol_StartNextTx();
@@ -427,14 +437,14 @@ static uint8_t HostProtocol_EnqueueFrame(HostProtocol_Source_t source, const uin
     return 0U;
   }
 
-  if (g_queue_count >= comm_protocol_QUEUE_SIZE)
+  if (g_rx_queue.count >= comm_protocol_QUEUE_SIZE)
   {
     g_last_status = comm_protocol_STATUS_OVERFLOW;
     return 0U;
   }
 
   payload_len = frame[8];
-  item = &g_queue[g_queue_head];
+  item = &g_rx_queue.data[g_rx_queue.head];
   item->source = source;
   item->msg_type = frame[3];
   item->cmd_set = frame[4];
@@ -446,8 +456,8 @@ static uint8_t HostProtocol_EnqueueFrame(HostProtocol_Source_t source, const uin
     memcpy(item->payload, &frame[9], payload_len);
   }
 
-  g_queue_head = (uint8_t)((g_queue_head + 1U) % comm_protocol_QUEUE_SIZE);
-  ++g_queue_count;
+  g_rx_queue.head = (uint8_t)((g_rx_queue.head + 1U) % comm_protocol_QUEUE_SIZE);
+  ++g_rx_queue.count;
   g_last_status = comm_protocol_STATUS_OK;
   return 1U;
 }
@@ -461,15 +471,15 @@ static uint8_t HostProtocol_DequeueFrame(HostProtocol_Frame_t *frame)
   }
 
   __disable_irq();
-  if (g_queue_count == 0U)
+  if (g_rx_queue.count == 0U)
   {
     __enable_irq();
     return 0U;
   }
 
-  memcpy(frame, &g_queue[g_queue_tail], sizeof(HostProtocol_Frame_t));
-  g_queue_tail = (uint8_t)((g_queue_tail + 1U) % comm_protocol_QUEUE_SIZE);
-  --g_queue_count;
+  memcpy(frame, &g_rx_queue.data[g_rx_queue.tail], sizeof(HostProtocol_Frame_t));
+  g_rx_queue.tail = (uint8_t)((g_rx_queue.tail + 1U) % comm_protocol_QUEUE_SIZE);
+  --g_rx_queue.count;
   __enable_irq();
   return 1U;
 }
@@ -571,7 +581,7 @@ static void HostProtocol_SendMotionStatusData(const HostProtocol_Frame_t *frame)
 
   memset(payload, 0, sizeof(payload));
   payload[0] = (uint8_t)status.state;
-  payload[1] = status.active;
+  payload[1] = (status.state == ADVANCE_MOTION_STATE_RUNNING) ? 1U : 0U;
   payload[2] = status.goal.goal_flags;
   payload[3] = 0U;
   HostProtocol_WriteI32(&payload[4], HostProtocol_FloatToI32(status.pose.x_mm));
@@ -603,8 +613,9 @@ static void HostProtocol_SendArmStatusData(const HostProtocol_Frame_t *frame)
   payload[0] = (uint8_t)status.task_state;
   payload[1] = (uint8_t)status.lift_position_validity;
   payload[2] = (uint8_t)status.swing_position_validity;
-  payload[3] = status.active;
-  payload[4] = status.faulted;
+  payload[3] = ((status.task_state >= ADVANCE_ARM_TASK_PICK_EXTEND) &&
+                (status.task_state <= ADVANCE_ARM_TASK_COMPLETE)) ? 1U : 0U;
+  payload[4] = (status.task_state == ADVANCE_ARM_TASK_FAULT) ? 1U : 0U;
   HostProtocol_WriteI32(&payload[5], status.lift_current_pulse);
   HostProtocol_WriteI32(&payload[9], status.lift_target_pulse);
   HostProtocol_WriteI32(&payload[13], status.swing_current_pulse);
@@ -1011,8 +1022,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
     HostProtocol_ReadArmPlan(frame->payload, &plan);
     arm_status = (frame->cmd_id == 0x12U) ? AdvanceArm_StartPick(&plan) : AdvanceArm_StartPlace(&plan);
     g_arm_ack_detail = (uint8_t)arm_status;
-    return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK :
-           ((arm_status == ADVANCE_ARM_STATUS_INVALID_PARAM) ? ACK_BAD_PARAM : ACK_DENIED);
+    return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ((arm_status == ADVANCE_ARM_STATUS_INVALID_PARAM) ? ACK_BAD_PARAM : ACK_DENIED);
 
   case 0x14U:
     if (frame->payload_len != 0U)
@@ -1198,28 +1208,28 @@ void HostProtocol_Poll(void)
 
 void HostProtocol_OnUartTxComplete(UART_HandleTypeDef *huart)
 {
-  if ((g_tx_active == 0U) || (g_tx_count == 0U) ||
-      (g_tx_queue[g_tx_tail].huart != huart))
+  if ((g_tx_queue.active == 0U) || (g_tx_queue.count == 0U) ||
+      (g_tx_queue.data[g_tx_queue.tail].huart != huart))
   {
     return;
   }
 
-  g_tx_tail = (uint8_t)((g_tx_tail + 1U) % comm_protocol_TX_QUEUE_SIZE);
-  --g_tx_count;
-  g_tx_active = 0U;
-  g_tx_started_tick = 0U;
+  g_tx_queue.tail = (uint8_t)((g_tx_queue.tail + 1U) % comm_protocol_TX_QUEUE_SIZE);
+  --g_tx_queue.count;
+  g_tx_queue.active = 0U;
+  g_tx_queue.started_tick = 0U;
   HostProtocol_StartNextTx();
 }
 
 void HostProtocol_OnUartError(UART_HandleTypeDef *huart)
 {
-  if ((g_tx_active != 0U) && (g_tx_count != 0U) &&
-      (g_tx_queue[g_tx_tail].huart == huart))
+  if ((g_tx_queue.active != 0U) && (g_tx_queue.count != 0U) &&
+      (g_tx_queue.data[g_tx_queue.tail].huart == huart))
   {
-    g_tx_tail = (uint8_t)((g_tx_tail + 1U) % comm_protocol_TX_QUEUE_SIZE);
-    --g_tx_count;
-    g_tx_active = 0U;
-    g_tx_started_tick = 0U;
+    g_tx_queue.tail = (uint8_t)((g_tx_queue.tail + 1U) % comm_protocol_TX_QUEUE_SIZE);
+    --g_tx_queue.count;
+    g_tx_queue.active = 0U;
+    g_tx_queue.started_tick = 0U;
     g_last_status = comm_protocol_STATUS_OVERFLOW;
     HostProtocol_StartNextTx();
   }
@@ -1232,5 +1242,5 @@ HostProtocol_Status_t HostProtocol_GetLastStatus(void)
 
 uint32_t HostProtocol_GetTxTimeoutCount(void)
 {
-  return g_tx_timeout_count;
+  return g_tx_queue.timeout_count;
 }
