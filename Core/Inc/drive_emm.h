@@ -377,31 +377,73 @@ void drive_emm_Read_PID_Params(uint8_t addr);
 /** @param kd 微分系数。 */
 void drive_emm_Modify_PID_Params(uint8_t addr, bool svF, uint32_t kp, uint32_t ki, uint32_t kd);
 // 读取DMX512协议参数（Y42）
+/** @brief 读取 DMX512 协议参数。 */
+/** @param addr 电机地址。 */
 void drive_emm_Read_DMX512_Params(uint8_t addr);
 // 修改DMX512协议参数（Y42）
+/** @brief 修改 DMX512 协议参数。 */
+/** @param addr 电机地址。 */
+/** @param svF 是否保存设置。 */
+/** @param tch 通道起始地址。 */
+/** @param nch 通道数量。 */
+/** @param mode 工作模式。 */
+/** @param vel 目标速度。 */
+/** @param acc 加速度。 */
+/** @param vel_step 速度步进值。 */
+/** @param pos_step 位置步进值。 */
 void drive_emm_Modify_DMX512_Params(uint8_t addr, bool svF, uint16_t tch, uint8_t nch, uint8_t mode, uint16_t vel, uint16_t acc, uint16_t vel_step, uint32_t pos_step);
 // 读取位置到达窗口（Y42）
+/** @brief 读取位置到达窗口。 */
+/** @param addr 电机地址。 */
 void drive_emm_Read_Pos_Window(uint8_t addr);
 // 修改位置到达窗口（Y42）
+/** @brief 修改位置到达窗口。 */
+/** @param addr 电机地址。 */
+/** @param svF 是否保存设置。 */
+/** @param prw 位置到达窗口。 */
 void drive_emm_Modify_Pos_Window(uint8_t addr, bool svF, uint16_t prw);
 // 读取过热过流保护检测阈值（Y42）
+/** @brief 读取过热过流保护检测阈值。 */
+/** @param addr 电机地址。 */
 void drive_emm_Read_Otocp(uint8_t addr);
 // 修改过热过流保护检测阈值（Y42）
+/** @brief 修改过热过流保护检测阈值。 */
+/** @param addr 电机地址。 */
+/** @param svF 是否保存设置。 */
+/** @param otp 过热保护阈值。 */
+/** @param ocp 过流保护阈值。 */
+/** @param time_ms 保护时间，单位为毫秒。 */
 void drive_emm_Modify_Otocp(uint8_t addr, bool svF, uint16_t otp, uint16_t ocp, uint16_t time_ms);
 // 读取心跳保护功能时间（Y42）
+/** @brief 读取心跳保护功能时间。 */
+/** @param addr 电机地址。 */
 void drive_emm_Read_Heart_Protect(uint8_t addr);
 // 修改心跳保护功能时间（Y42）
+/** @brief 修改心跳保护功能时间。 */
+/** @param addr 电机地址。 */
+/** @param svF 是否保存设置。 */
+/** @param hp 心跳保护时间。 */
 void drive_emm_Modify_Heart_Protect(uint8_t addr, bool svF, uint32_t hp);
 // 读取积分限幅/刚性系数（Y42）
+/** @brief 读取积分限幅和刚性系数。 */
+/** @param addr 电机地址。 */
 void drive_emm_Read_Integral_Limit(uint8_t addr);
 // 修改积分限幅/刚性系数（Y42）
+/** @brief 修改积分限幅和刚性系数。 */
+/** @param addr 电机地址。 */
+/** @param svF 是否保存设置。 */
+/** @param il 积分限幅或刚性系数。 */
 void drive_emm_Modify_Integral_Limit(uint8_t addr, bool svF, uint32_t il);
 /**********************************************************
 *** 读取所有驱动参数命令
 **********************************************************/
 // 读取系统状态参数
+/** @brief 读取系统状态参数。 */
+/** @param addr 电机地址。 */
 void drive_emm_Read_System_State_Params(uint8_t addr);
 // 读取驱动配置参数
+/** @brief 读取驱动配置参数。 */
+/** @param addr 电机地址。 */
 void drive_emm_Read_Motor_Conf_Params(uint8_t addr);
 
 /**
@@ -419,45 +461,105 @@ void drive_emm_Read_Motor_Conf_Params(uint8_t addr);
 *** 触发动作命令
 **********************************************************/
 // 触发编码器校准 - 加载到多电机指令上
+/** @brief 将编码器校准命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
 void drive_emm_MMCL_Trig_Encoder_Cal(uint8_t addr);
 // 重启电机 - 加载到多电机指令上
+/** @brief 将电机重启命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
 void drive_emm_MMCL_Reset_Motor(uint8_t addr);
 // 将当前位置清零 - 加载到多电机指令上
+/** @brief 将当前位置清零命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
 void drive_emm_MMCL_Reset_CurPos_To_Zero(uint8_t addr);
 // 解除堵转保护 - 加载到多电机指令上
+/** @brief 将解除堵转保护命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
 void drive_emm_MMCL_Reset_Clog_Pro(uint8_t addr);
 // 恢复出厂设置 - 加载到多电机指令上
+/** @brief 将恢复出厂设置命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
 void drive_emm_MMCL_Restore_Motor(uint8_t addr);
 /**********************************************************
 *** 运动控制命令
 **********************************************************/
 // 电机使能控制 - 加载到多电机指令上
+/** @brief 将电机使能命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
+/** @param state 使能状态。 */
+/** @param snF 是否保存设置。 */
 void drive_emm_MMCL_En_Control(uint8_t addr, bool state, bool snF);
 // 速度模式控制 - 加载到多电机指令上
+/** @brief 将速度控制命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
+/** @param dir 运动方向。 */
+/** @param vel 目标速度。 */
+/** @param acc 加速度。 */
+/** @param snF 是否保存设置。 */
 void drive_emm_MMCL_Vel_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, bool snF);
 // 位置模式控制 - 加载到多电机指令上
+/** @brief 将位置控制命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
+/** @param dir 运动方向。 */
+/** @param vel 目标速度。 */
+/** @param acc 加速度。 */
+/** @param clk 目标脉冲数。 */
+/** @param raF 是否相对位置运动。 */
+/** @param snF 是否保存设置。 */
 void drive_emm_MMCL_Pos_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc, uint32_t clk, bool raF, bool snF);
 // 让电机立即停止运动 - 加载到多电机指令上
+/** @brief 将立即停止命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
+/** @param snF 是否保存设置。 */
 void drive_emm_MMCL_Stop_Now(uint8_t addr, bool snF);
 // 触发多机同步开始运动 - 加载到多电机指令上
+/** @brief 将多机同步开始运动命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
 void drive_emm_MMCL_Synchronous_motion(uint8_t addr);
 /**********************************************************
 *** 原点回零命令
 **********************************************************/
 // 设置单圈回零的零点位置 - 加载到多电机指令上
+/** @brief 将设置单圈回零零点命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
+/** @param svF 是否保存设置。 */
 void drive_emm_MMCL_Origin_Set_O(uint8_t addr, bool svF);
 // 触发回零 - 加载到多电机指令上
+/** @brief 将触发回零命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
+/** @param o_mode 回零模式。 */
+/** @param snF 是否保存设置。 */
 void drive_emm_MMCL_Origin_Trigger_Return(uint8_t addr, uint8_t o_mode, bool snF);
 // 强制中断并退出回零 - 加载到多电机指令上
+/** @brief 将中断并退出回零命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
 void drive_emm_MMCL_Origin_Interrupt(uint8_t addr);
 // 修改回零参数 - 加载到多电机指令上
+/** @brief 将修改回零参数命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
+/** @param svF 是否保存设置。 */
+/** @param o_mode 回零模式。 */
+/** @param o_dir 回零方向。 */
+/** @param o_vel 回零速度。 */
+/** @param o_tm 回零超时时间。 */
+/** @param sl_vel 切换速度。 */
+/** @param sl_ma 切换电流。 */
+/** @param sl_ms 切换时间。 */
+/** @param potF 是否启用正限位。 */
 void drive_emm_MMCL_Origin_Modify_Params(uint8_t addr, bool svF, uint8_t o_mode, uint8_t o_dir, uint16_t o_vel, uint32_t o_tm, uint16_t sl_vel, uint16_t sl_ma, uint16_t sl_ms, bool potF);
 /**********************************************************
 *** 读取系统参数命令
 **********************************************************/
 // 定时返回信息命令（Y42） - 加载到多电机指令上
+/** @brief 将定时返回系统参数命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
+/** @param s 系统参数类型。 */
+/** @param time_ms 返回周期，单位为毫秒。 */
 void drive_emm_MMCL_Auto_Return_Sys_Params_Timed(uint8_t addr, SysParams_t s, uint16_t time_ms);
 // 读取系统参数 - 加载到多电机指令上
+/** @brief 将读取系统参数命令加载到多电机命令缓存。 */
+/** @param addr 电机地址。 */
+/** @param s 系统参数类型。 */
 void drive_emm_MMCL_Read_Sys_Params(uint8_t addr, SysParams_t s);
 /**********************************************************
 *** 读写驱动参数命令
