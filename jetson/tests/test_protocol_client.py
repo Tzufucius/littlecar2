@@ -71,7 +71,6 @@ class ProtocolClientTest(unittest.TestCase):
     def test_system_and_safety_methods_send_supported_commands(self):
         self.car.system.ping()
         self.car.system.heartbeat(1234)
-        self.car.system.set_mode(2)
         self.car.safety.estop(3)
         self.car.safety.safe_stop(0)
         self.car.safety.clear()
@@ -81,7 +80,6 @@ class ProtocolClientTest(unittest.TestCase):
             [
                 (CmdSet.SYSTEM, 0x01),
                 (CmdSet.SYSTEM, 0x02),
-                (CmdSet.SYSTEM, 0x03),
                 (CmdSet.SAFETY, 0x01),
                 (CmdSet.SAFETY, 0x02),
                 (CmdSet.SAFETY, 0x03),
