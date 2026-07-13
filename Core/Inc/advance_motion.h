@@ -69,15 +69,23 @@ extern "C"
     uint8_t active; /*!< 是否存在活动目标：1-是，0-否。 */
   } AdvanceMotion_RuntimeStatus_t;
 
+  /** @brief 初始化运动控制模块。 */
   void AdvanceMotion_Init(void);
+  /** @brief 设置世界坐标系速度。 @return 设置结果状态。 */
   AdvanceMotion_Status_t AdvanceMotion_SetWorldVelocity(float vx_world_mm_s, float vy_world_mm_s, float wz_ccw_deg_s);
+  /** @brief 设置世界坐标系速度及加速度。 @return 设置结果状态。 */
   AdvanceMotion_Status_t AdvanceMotion_SetWorldVelocityEx(float vx_world_mm_s, float vy_world_mm_s, float wz_ccw_deg_s, uint8_t acc);
+  /** @brief 启动位姿导航。 @param goal 目标位姿指针。 @return 启动结果状态。 */
   AdvanceMotion_Status_t AdvanceMotion_GotoPose(const WorldGoalPose2D_t *goal);
+  /** @brief 启动带加速度参数的位姿导航。 @param goal 目标位姿指针。 @return 启动结果状态。 */
   AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, uint8_t acc);
+  /** @brief 轮询推进位姿导航控制器。 */
   void AdvanceMotion_Poll(void);
   /** @brief 仅在存在活动目标时取消并平滑停车，避免空闲状态产生多余停止帧。 */
   void AdvanceMotion_CancelIfActive(void);
+  /** @brief 取消当前导航目标并停车。 */
   void AdvanceMotion_Cancel(void);
+  /** @brief 获取运动控制运行状态。 @param status 输出状态结构体。 @return 获取结果状态。 */
   AdvanceMotion_Status_t AdvanceMotion_GetStatus(AdvanceMotion_RuntimeStatus_t *status);
 
 #ifdef __cplusplus

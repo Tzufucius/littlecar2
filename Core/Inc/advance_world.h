@@ -70,16 +70,26 @@ extern "C"
     float wz_deg_s; /*!< 绕 Z 轴角速度，单位为度/s。 */
   } WorldVelocity2D_t;
 
+  /** @brief 初始化世界坐标模块。 */
   void AdvanceWorld_Init(void);
+  /** @brief 将当前位姿设置为世界坐标原点。 @return 重置结果状态。 */
   AdvanceWorld_Status_t AdvanceWorld_ResetOrigin(void);
+  /** @brief 轮询更新世界坐标和传感器状态。 */
   void AdvanceWorld_Poll(void);
+  /** @brief 获取当前世界位姿只读引用。 @return 世界位姿指针。 */
   const volatile WorldPose2D_t *AdvanceWorld_GetPose(void);
+  /** @brief 获取当前世界位姿副本。 @param pose 输出位姿结构体。 @return 获取结果状态。 */
   AdvanceWorld_Status_t AdvanceWorld_GetPoseCopy(WorldPose2D_t *pose);
 
+  /** @brief 将角度归一化到标准范围。 @param angle_deg 输入角度，单位为度。 @return 归一化后的角度。 */
   float AdvanceWorld_WrapAngleDeg(float angle_deg);
+  /** @brief 将浮点数限制在指定范围内。 @return 限幅后的数值。 */
   float AdvanceWorld_LimitFloat(float value, float min_value, float max_value);
+  /** @brief 将世界坐标系速度转换为车体坐标系速度。 */
   void AdvanceWorld_WorldToBodyVelocity(float vx_w, float vy_w, float yaw_deg, float *vx_b, float *vy_b);
+  /** @brief 将车体坐标系速度转换为世界坐标系速度。 */
   void AdvanceWorld_BodyToWorldVelocity(float vx_b, float vy_b, float yaw_deg, float *vx_w, float *vy_w);
+  /** @brief 输出世界坐标调试信息。 */
   void AdvanceWorld_PrintDebug(void);
 
 #ifdef __cplusplus
