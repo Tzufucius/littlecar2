@@ -1,4 +1,4 @@
-﻿/* USER CODE BEGIN Header */
+/* USER CODE BEGIN Header */
 /**
  ******************************************************************************
  * @file           : main.c
@@ -30,7 +30,7 @@
 #include "advance_motion.h"
 #include "advance_world.h"
 #include "advance_arm.h"
-#include "comm_pc.h"
+#include "comm_host.h"
 #include "comm_protocol.h"
 #include "car_pose.h"
 
@@ -141,18 +141,9 @@ void testEmmV5Datou(uint8_t id)
   drive_emm_Stop_Now(id, false);
 }
 
-void situation_led()
+static void App_ToggleStatusLed(void)
 {
-  // 状态指示灯：每 500ms 翻转一次 GPIO 状态
-  // 如果烧录成功并正常运行，可以看到板载 LED 闪烁
-  static uint32_t led_tick = 0;
-  if (HAL_GetTick() - led_tick >= 500)
-  {
-    led_tick = HAL_GetTick();
-    // 翻转 PF9 红色 LED 和 PF10 绿色 LED
-    HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_9);
-    HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_10);
-  }
+  HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_9 | GPIO_PIN_10);
 }
 
 void test() // 测试的东西全写在里面
@@ -188,7 +179,7 @@ static void App_SafetyCheck(void)
   if ((Chassis_IsMotionCommandActive() != 0U) &&
       (drive_emm_IsChassisFeedbackHealthy() == 0U))
   {
-    AdvanceMotion_CancelIfActive();
+    AdvanceMotion_CancelWithoutStop();
     Chassis_Stop();
   }
 }
@@ -197,7 +188,7 @@ static void App_RunScheduledTasks(uint32_t pending)
 {
   if ((pending & APP_TASK_PROTOCOL) != 0U)
   {
-    HostRx_Poll();
+    HostComm_Poll();
   }
 
   if ((pending & APP_TASK_WORLD) != 0U)
@@ -231,7 +222,7 @@ static void App_RunScheduledTasks(uint32_t pending)
 
   if ((pending & APP_TASK_LED) != 0U)
   {
-    situation_led();
+    App_ToggleStatusLed();
   }
 }
 
@@ -296,14 +287,14 @@ int main(void)
   BusServo_Init(&huart4);
 
   // 通信初始化
-  if (HostRx_InitPc(&huart1) != comm_pc_STATUS_OK)
+  if (HostComm_InitChannel(HOST_SOURCE_PC, &huart1) != HOST_COMM_STATUS_OK)
   {
-    printf("HostRx PC init failed\r\n");
+    printf("HostComm PC init failed\r\n");
   }
 
-  if (HostRx_InitJetson(&huart6) != comm_pc_STATUS_OK)
+  if (HostComm_InitChannel(HOST_SOURCE_JETSON, &huart6) != HOST_COMM_STATUS_OK)
   {
-    printf("HostRx Jetson init failed\r\n");
+    printf("HostComm Jetson init failed\r\n");
   }
 
   /* 原点建立由 1 s 调度任务重试，不阻塞等待 OPS 数据。 */
@@ -705,12 +696,12 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 
   if (huart->Instance == USART1)
   {
-    HostRx_OnUartRxEvent(huart, Size);
+    HostComm_OnUartRxEvent(huart, Size);
   }
 
   if (huart->Instance == USART6)
   {
-    HostRx_OnUartRxEvent(huart, Size);
+    HostComm_OnUartRxEvent(huart, Size);
   }
 }
 
@@ -756,12 +747,12 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 
   if (huart->Instance == USART6)
   {
-    HostRx_OnUartError(huart);
+    HostComm_OnUartError(huart);
   }
 
   if (huart->Instance == USART1)
   {
-    HostRx_OnUartError(huart);
+    HostComm_OnUartError(huart);
   }
 }
 

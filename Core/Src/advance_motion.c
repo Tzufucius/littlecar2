@@ -318,6 +318,17 @@ void AdvanceMotion_CancelIfActive(void)
   }
 }
 
+void AdvanceMotion_CancelWithoutStop(void)
+{
+  if (g_motion.state == ADVANCE_MOTION_STATE_RUNNING)
+  {
+    g_motion.state = ADVANCE_MOTION_STATE_CANCELED;
+    g_motion.updated_tick = HAL_GetTick();
+    g_motion.arrive_hold_start_tick = 0U;
+    g_motion.arrival_stop_sent = 0U;
+  }
+}
+
 AdvanceMotion_Status_t AdvanceMotion_GetStatus(AdvanceMotion_RuntimeStatus_t *status)
 {
   if (status == 0)
