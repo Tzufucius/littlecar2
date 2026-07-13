@@ -18,7 +18,6 @@ typedef struct
   uint32_t updated_tick;
   uint32_t last_control_tick;
   uint32_t arrive_hold_start_tick;
-  uint8_t active;
   uint8_t arrival_stop_sent;
   uint8_t acc;
 } AdvanceMotion_Context_t;
@@ -122,7 +121,6 @@ static AdvanceMotion_Status_t AdvanceMotion_GetFreshPose(WorldPose2D_t *pose)
 static void AdvanceMotion_SetTerminalState(AdvanceMotion_RunState_t state, uint8_t stop_acc)
 {
   g_motion.state = state;
-  g_motion.active = 0U;
   g_motion.updated_tick = HAL_GetTick();
   Chassis_SmoothStop(stop_acc);
 }
@@ -178,7 +176,6 @@ AdvanceMotion_Status_t AdvanceMotion_SetWorldVelocityEx(float vx_world_mm_s, flo
 {
   if (g_motion.state == ADVANCE_MOTION_STATE_RUNNING)
   {
-    g_motion.active = 0U;
     g_motion.state = ADVANCE_MOTION_STATE_CANCELED;
     g_motion.updated_tick = HAL_GetTick();
   }
@@ -208,7 +205,6 @@ AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, u
   g_motion.error_y_mm = 0.0f;
   g_motion.position_error_mm = 0.0f;
   g_motion.yaw_error_deg = 0.0f;
-  g_motion.active = 1U;
   g_motion.acc = acc;
   g_motion.state = ADVANCE_MOTION_STATE_RUNNING;
   return ADVANCE_MOTION_STATUS_OK;
@@ -225,7 +221,7 @@ void AdvanceMotion_Poll(void)
   float wmax_deg_s;
   uint8_t yaw_required;
 
-  if ((g_motion.active == 0U) || (g_motion.state != ADVANCE_MOTION_STATE_RUNNING))
+  if (g_motion.state != ADVANCE_MOTION_STATE_RUNNING)
   {
     return;
   }
@@ -316,7 +312,7 @@ void AdvanceMotion_Cancel(void)
 
 void AdvanceMotion_CancelIfActive(void)
 {
-  if ((g_motion.active != 0U) || (g_motion.state == ADVANCE_MOTION_STATE_RUNNING))
+  if (g_motion.state == ADVANCE_MOTION_STATE_RUNNING)
   {
     AdvanceMotion_Cancel();
   }
@@ -338,6 +334,5 @@ AdvanceMotion_Status_t AdvanceMotion_GetStatus(AdvanceMotion_RuntimeStatus_t *st
   status->yaw_error_deg = g_motion.yaw_error_deg;
   status->started_tick = g_motion.started_tick;
   status->updated_tick = g_motion.updated_tick;
-  status->active = g_motion.active;
   return ADVANCE_MOTION_STATUS_OK;
 }

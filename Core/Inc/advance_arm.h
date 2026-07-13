@@ -97,8 +97,6 @@ extern "C"
     int32_t lift_target_pulse; /*!< 升降目标位置脉冲。 */
     int32_t swing_current_pulse; /*!< 摆臂当前位置脉冲。 */
     int32_t swing_target_pulse; /*!< 摆臂目标位置脉冲。 */
-    uint8_t active; /*!< 任务是否正在执行：1-是，0-否。 */
-    uint8_t faulted; /*!< 是否处于故障状态：1-是，0-否。 */
     uint32_t updated_tick; /*!< 状态更新时间，单位为 ms。 */
   } AdvanceArm_RuntimeStatus_t;
 

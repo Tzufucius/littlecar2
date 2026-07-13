@@ -66,7 +66,6 @@ extern "C"
     float yaw_error_deg; /*!< 航向角误差，单位为度。 */
     uint32_t started_tick; /*!< 任务开始时间，单位为 ms。 */
     uint32_t updated_tick; /*!< 状态更新时间，单位为 ms。 */
-    uint8_t active; /*!< 是否存在活动目标：1-是，0-否。 */
   } AdvanceMotion_RuntimeStatus_t;
 
   /** @brief 初始化运动控制模块。 */
