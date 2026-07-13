@@ -571,7 +571,7 @@ static void HostProtocol_SendMotionStatusData(const HostProtocol_Frame_t *frame)
 
   memset(payload, 0, sizeof(payload));
   payload[0] = (uint8_t)status.state;
-  payload[1] = status.active;
+  payload[1] = (status.state == ADVANCE_MOTION_STATE_RUNNING) ? 1U : 0U;
   payload[2] = status.goal.goal_flags;
   payload[3] = 0U;
   HostProtocol_WriteI32(&payload[4], HostProtocol_FloatToI32(status.pose.x_mm));
