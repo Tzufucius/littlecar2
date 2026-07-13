@@ -1011,8 +1011,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
     HostProtocol_ReadArmPlan(frame->payload, &plan);
     arm_status = (frame->cmd_id == 0x12U) ? AdvanceArm_StartPick(&plan) : AdvanceArm_StartPlace(&plan);
     g_arm_ack_detail = (uint8_t)arm_status;
-    return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK :
-           ((arm_status == ADVANCE_ARM_STATUS_INVALID_PARAM) ? ACK_BAD_PARAM : ACK_DENIED);
+    return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ((arm_status == ADVANCE_ARM_STATUS_INVALID_PARAM) ? ACK_BAD_PARAM : ACK_DENIED);
 
   case 0x14U:
     if (frame->payload_len != 0U)

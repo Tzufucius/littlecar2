@@ -139,8 +139,7 @@ static void AdvanceWorld_UpdatePoseFromOps(void)
   g_world_pose.y_mm = -sin_yaw * dx_raw + cos_yaw * dy_raw;
   g_world_pose.yaw_deg = AdvanceWorld_GetRelativeYawDeg();
   g_world_pose.updated_tick = carpose_ops->updated_tick;
-  g_world_pose.yaw_updated_tick = (g_world_origin.imu_yaw_ready != 0U) ?
-                                     carpose_imu->angle_deg.updated_tick : carpose_ops->updated_tick;
+  g_world_pose.yaw_updated_tick = (g_world_origin.imu_yaw_ready != 0U) ? carpose_imu->angle_deg.updated_tick : carpose_ops->updated_tick;
   g_world_pose.valid = 1U;
   g_world_pose.origin_ready = 1U;
 }

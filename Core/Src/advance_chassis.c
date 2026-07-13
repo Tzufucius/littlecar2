@@ -185,7 +185,9 @@ void Chassis_SetMotorRPMEx(int16_t lf_rpm, int16_t rf_rpm, int16_t lr_rpm, int16
 
   Chassis_SendLoadedCommand();
   g_chassis_motion_command_active = ((lf_rpm != 0) || (rf_rpm != 0) ||
-                                     (lr_rpm != 0) || (rr_rpm != 0)) ? 1U : 0U;
+                                     (lr_rpm != 0) || (rr_rpm != 0))
+                                        ? 1U
+                                        : 0U;
 }
 
 uint8_t Chassis_IsMotionCommandActive(void)

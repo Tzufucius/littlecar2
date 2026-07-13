@@ -90,9 +90,9 @@ static uint8_t AdvanceArm_AxisReached(const AdvanceArm_Axis_t *axis)
 }
 
 static AdvanceArm_Status_t AdvanceArm_CommandRelative(AdvanceArm_Axis_t *axis,
-                                                       AdvanceArm_MotorDirection_t direction,
-                                                       uint16_t velocity, uint8_t acceleration,
-                                                       uint32_t pulse_count)
+                                                      AdvanceArm_MotorDirection_t direction,
+                                                      uint16_t velocity, uint8_t acceleration,
+                                                      uint32_t pulse_count)
 {
   if ((axis == NULL) || (axis->validity != ADVANCE_ARM_POSITION_VALID))
   {
@@ -101,12 +101,12 @@ static AdvanceArm_Status_t AdvanceArm_CommandRelative(AdvanceArm_Axis_t *axis,
   drive_emm_Pos_Control(axis->motor_id, (uint8_t)direction, velocity, acceleration,
                         pulse_count, false, false);
   axis->target_pulse = axis->current_pulse +
-      ((direction == ADVANCE_ARM_MOTOR_DIRECTION_FORWARD) ? (int32_t)pulse_count : -(int32_t)pulse_count);
+                       ((direction == ADVANCE_ARM_MOTOR_DIRECTION_FORWARD) ? (int32_t)pulse_count : -(int32_t)pulse_count);
   return ADVANCE_ARM_STATUS_OK;
 }
 
 static AdvanceArm_Status_t AdvanceArm_StartTask(const AdvanceArm_TaskPlan_t *plan,
-                                                 AdvanceArm_TaskState_t first_state)
+                                                AdvanceArm_TaskState_t first_state)
 {
   if ((plan == NULL) || (g_advance_arm.configured == 0U))
   {
@@ -228,59 +228,82 @@ void AdvanceArm_Poll(void)
     if (AdvanceArm_CommandRelative(&g_advance_arm.swing, g_advance_arm.config.swing_extend_direction,
                                    g_advance_arm.config.swing_velocity, g_advance_arm.config.swing_acceleration,
                                    g_advance_arm.plan.swing_extend_pulse) != ADVANCE_ARM_STATUS_OK)
-    { AdvanceArm_SetFault(); break; }
-    AdvanceArm_EnterState((g_advance_arm.state == ADVANCE_ARM_TASK_PICK_EXTEND) ?
-                          ADVANCE_ARM_TASK_PICK_LOWER : ADVANCE_ARM_TASK_PLACE_LOWER);
+    {
+      AdvanceArm_SetFault();
+      break;
+    }
+    AdvanceArm_EnterState((g_advance_arm.state == ADVANCE_ARM_TASK_PICK_EXTEND) ? ADVANCE_ARM_TASK_PICK_LOWER : ADVANCE_ARM_TASK_PLACE_LOWER);
     break;
   case ADVANCE_ARM_TASK_PICK_LOWER:
   case ADVANCE_ARM_TASK_PLACE_LOWER:
-    if (AdvanceArm_AxisReached(&g_advance_arm.swing) == 0U) { break; }
+    if (AdvanceArm_AxisReached(&g_advance_arm.swing) == 0U)
+    {
+      break;
+    }
     if (AdvanceArm_CommandRelative(&g_advance_arm.lift, g_advance_arm.config.lift_down_direction,
                                    g_advance_arm.config.lift_velocity, g_advance_arm.config.lift_acceleration,
                                    g_advance_arm.plan.lift_lower_pulse) != ADVANCE_ARM_STATUS_OK)
-    { AdvanceArm_SetFault(); break; }
-    AdvanceArm_EnterState((g_advance_arm.state == ADVANCE_ARM_TASK_PICK_LOWER) ?
-                          ADVANCE_ARM_TASK_PICK_GRIP : ADVANCE_ARM_TASK_PLACE_RELEASE);
+    {
+      AdvanceArm_SetFault();
+      break;
+    }
+    AdvanceArm_EnterState((g_advance_arm.state == ADVANCE_ARM_TASK_PICK_LOWER) ? ADVANCE_ARM_TASK_PICK_GRIP : ADVANCE_ARM_TASK_PLACE_RELEASE);
     break;
   case ADVANCE_ARM_TASK_PICK_GRIP:
   case ADVANCE_ARM_TASK_PLACE_RELEASE:
-    if (AdvanceArm_AxisReached(&g_advance_arm.lift) == 0U) { break; }
+    if (AdvanceArm_AxisReached(&g_advance_arm.lift) == 0U)
+    {
+      break;
+    }
     if (BusServo_SetPositionEx(g_advance_arm.config.gripper_servo_id,
                                g_advance_arm.plan.gripper_acceleration,
-                               (g_advance_arm.state == ADVANCE_ARM_TASK_PICK_GRIP) ?
-                               g_advance_arm.plan.gripper_close_position : g_advance_arm.plan.gripper_release_position,
+                               (g_advance_arm.state == ADVANCE_ARM_TASK_PICK_GRIP) ? g_advance_arm.plan.gripper_close_position : g_advance_arm.plan.gripper_release_position,
                                g_advance_arm.plan.gripper_speed) != drive_bus_servo_STATUS_OK)
-    { AdvanceArm_SetFault(); break; }
-    AdvanceArm_EnterState((g_advance_arm.state == ADVANCE_ARM_TASK_PICK_GRIP) ?
-                          ADVANCE_ARM_TASK_PICK_LIFT : ADVANCE_ARM_TASK_PLACE_LIFT);
+    {
+      AdvanceArm_SetFault();
+      break;
+    }
+    AdvanceArm_EnterState((g_advance_arm.state == ADVANCE_ARM_TASK_PICK_GRIP) ? ADVANCE_ARM_TASK_PICK_LIFT : ADVANCE_ARM_TASK_PLACE_LIFT);
     g_advance_arm.state_tick = now + g_advance_arm.plan.servo_wait_ms;
     break;
   case ADVANCE_ARM_TASK_PICK_LIFT:
   case ADVANCE_ARM_TASK_PLACE_LIFT:
-    if ((int32_t)(now - g_advance_arm.state_tick) < 0) { break; }
+    if ((int32_t)(now - g_advance_arm.state_tick) < 0)
+    {
+      break;
+    }
     if (AdvanceArm_CommandRelative(&g_advance_arm.lift,
-                                   (g_advance_arm.config.lift_down_direction == ADVANCE_ARM_MOTOR_DIRECTION_FORWARD) ?
-                                   ADVANCE_ARM_MOTOR_DIRECTION_REVERSE : ADVANCE_ARM_MOTOR_DIRECTION_FORWARD,
+                                   (g_advance_arm.config.lift_down_direction == ADVANCE_ARM_MOTOR_DIRECTION_FORWARD) ? ADVANCE_ARM_MOTOR_DIRECTION_REVERSE : ADVANCE_ARM_MOTOR_DIRECTION_FORWARD,
                                    g_advance_arm.config.lift_velocity, g_advance_arm.config.lift_acceleration,
                                    g_advance_arm.plan.lift_raise_pulse) != ADVANCE_ARM_STATUS_OK)
-    { AdvanceArm_SetFault(); break; }
-    AdvanceArm_EnterState((g_advance_arm.state == ADVANCE_ARM_TASK_PICK_LIFT) ?
-                          ADVANCE_ARM_TASK_PICK_RETRACT : ADVANCE_ARM_TASK_PLACE_RETRACT);
+    {
+      AdvanceArm_SetFault();
+      break;
+    }
+    AdvanceArm_EnterState((g_advance_arm.state == ADVANCE_ARM_TASK_PICK_LIFT) ? ADVANCE_ARM_TASK_PICK_RETRACT : ADVANCE_ARM_TASK_PLACE_RETRACT);
     break;
   case ADVANCE_ARM_TASK_PICK_RETRACT:
   case ADVANCE_ARM_TASK_PLACE_RETRACT:
-    if (AdvanceArm_AxisReached(&g_advance_arm.lift) == 0U) { break; }
+    if (AdvanceArm_AxisReached(&g_advance_arm.lift) == 0U)
+    {
+      break;
+    }
     if (AdvanceArm_CommandRelative(&g_advance_arm.swing,
-                                   (g_advance_arm.config.swing_extend_direction == ADVANCE_ARM_MOTOR_DIRECTION_FORWARD) ?
-                                   ADVANCE_ARM_MOTOR_DIRECTION_REVERSE : ADVANCE_ARM_MOTOR_DIRECTION_FORWARD,
+                                   (g_advance_arm.config.swing_extend_direction == ADVANCE_ARM_MOTOR_DIRECTION_FORWARD) ? ADVANCE_ARM_MOTOR_DIRECTION_REVERSE : ADVANCE_ARM_MOTOR_DIRECTION_FORWARD,
                                    g_advance_arm.config.swing_velocity, g_advance_arm.config.swing_acceleration,
                                    g_advance_arm.plan.swing_retract_pulse) != ADVANCE_ARM_STATUS_OK)
-    { AdvanceArm_SetFault(); break; }
+    {
+      AdvanceArm_SetFault();
+      break;
+    }
     AdvanceArm_EnterState(ADVANCE_ARM_TASK_COMPLETE);
     break;
   case ADVANCE_ARM_TASK_COMPLETE:
     if (AdvanceArm_AxisReached(&g_advance_arm.swing) != 0U)
-    { g_advance_arm.active = 0U; AdvanceArm_EnterState(ADVANCE_ARM_TASK_READY); }
+    {
+      g_advance_arm.active = 0U;
+      AdvanceArm_EnterState(ADVANCE_ARM_TASK_READY);
+    }
     break;
   default:
     break;
@@ -288,14 +311,21 @@ void AdvanceArm_Poll(void)
 }
 
 AdvanceArm_Status_t AdvanceArm_StartPick(const AdvanceArm_TaskPlan_t *plan)
-{ return AdvanceArm_StartTask(plan, ADVANCE_ARM_TASK_PICK_EXTEND); }
+{
+  return AdvanceArm_StartTask(plan, ADVANCE_ARM_TASK_PICK_EXTEND);
+}
 
 AdvanceArm_Status_t AdvanceArm_StartPlace(const AdvanceArm_TaskPlan_t *plan)
-{ return AdvanceArm_StartTask(plan, ADVANCE_ARM_TASK_PLACE_EXTEND); }
+{
+  return AdvanceArm_StartTask(plan, ADVANCE_ARM_TASK_PLACE_EXTEND);
+}
 
 AdvanceArm_Status_t AdvanceArm_GetStatus(AdvanceArm_RuntimeStatus_t *status)
 {
-  if (status == NULL) { return ADVANCE_ARM_STATUS_INVALID_PARAM; }
+  if (status == NULL)
+  {
+    return ADVANCE_ARM_STATUS_INVALID_PARAM;
+  }
   *status = (AdvanceArm_RuntimeStatus_t){
       .lift_position_validity = g_advance_arm.lift.validity,
       .swing_position_validity = g_advance_arm.swing.validity,
@@ -311,15 +341,18 @@ AdvanceArm_Status_t AdvanceArm_GetStatus(AdvanceArm_RuntimeStatus_t *status)
 }
 
 BusServo_Status_t AdvanceArm_RotatePlate(uint8_t id, uint16_t acc, int32_t pos, uint16_t speed)
-{ return BusServo_SetPositionEx(id, acc, pos, speed); }
+{
+  return BusServo_SetPositionEx(id, acc, pos, speed);
+}
 BusServo_Status_t AdvanceArm_RotateBase(uint8_t id, uint16_t acc, int32_t pos, uint16_t speed)
-{ return BusServo_SetPositionEx(id, acc, pos, speed); }
+{
+  return BusServo_SetPositionEx(id, acc, pos, speed);
+}
 
 AdvanceArm_Status_t AdvanceArm_Grab(uint8_t id, bool closed, int32_t release, int32_t close,
                                     uint16_t acc, uint16_t speed)
 {
-  return (BusServo_SetPositionEx(id, acc, closed ? close : release, speed) == drive_bus_servo_STATUS_OK) ?
-      ADVANCE_ARM_STATUS_OK : ADVANCE_ARM_STATUS_FAULT;
+  return (BusServo_SetPositionEx(id, acc, closed ? close : release, speed) == drive_bus_servo_STATUS_OK) ? ADVANCE_ARM_STATUS_OK : ADVANCE_ARM_STATUS_FAULT;
 }
 
 static AdvanceArm_Status_t AdvanceArm_MoveStepper(uint8_t id, AdvanceArm_MotorDirection_t dir,
@@ -328,22 +361,30 @@ static AdvanceArm_Status_t AdvanceArm_MoveStepper(uint8_t id, AdvanceArm_MotorDi
 {
   AdvanceArm_Axis_t *axis = AdvanceArm_FindAxis(id);
   if ((axis == NULL) || (axis->validity != ADVANCE_ARM_POSITION_VALID))
-  { return ADVANCE_ARM_STATUS_NOT_READY; }
+  {
+    return ADVANCE_ARM_STATUS_NOT_READY;
+  }
   drive_emm_Pos_Control(id, (uint8_t)dir, velocity, acc, pulse, !relative, synchronous);
-  axis->target_pulse = relative ? axis->current_pulse + ((dir == ADVANCE_ARM_MOTOR_DIRECTION_FORWARD) ?
-      (int32_t)pulse : -(int32_t)pulse) : ((dir == ADVANCE_ARM_MOTOR_DIRECTION_FORWARD) ? (int32_t)pulse : -(int32_t)pulse);
+  axis->target_pulse = relative ? axis->current_pulse + ((dir == ADVANCE_ARM_MOTOR_DIRECTION_FORWARD) ? (int32_t)pulse : -(int32_t)pulse) : ((dir == ADVANCE_ARM_MOTOR_DIRECTION_FORWARD) ? (int32_t)pulse : -(int32_t)pulse);
   return ADVANCE_ARM_STATUS_OK;
 }
 
 AdvanceArm_Status_t AdvanceArm_MoveLift(uint8_t id, AdvanceArm_MotorDirection_t dir, uint16_t v,
                                         uint8_t a, uint32_t p, bool relative, bool sync)
-{ return AdvanceArm_MoveStepper(id, dir, v, a, p, relative, sync); }
+{
+  return AdvanceArm_MoveStepper(id, dir, v, a, p, relative, sync);
+}
 AdvanceArm_Status_t AdvanceArm_MoveSwing(uint8_t id, AdvanceArm_MotorDirection_t dir, uint16_t v,
                                          uint8_t a, uint32_t p, bool relative, bool sync)
-{ return AdvanceArm_MoveStepper(id, dir, v, a, p, relative, sync); }
+{
+  return AdvanceArm_MoveStepper(id, dir, v, a, p, relative, sync);
+}
 AdvanceArm_Status_t AdvanceArm_StopMotor(uint8_t id, bool sync)
 {
-  if (AdvanceArm_FindAxis(id) == NULL) { return ADVANCE_ARM_STATUS_INVALID_PARAM; }
+  if (AdvanceArm_FindAxis(id) == NULL)
+  {
+    return ADVANCE_ARM_STATUS_INVALID_PARAM;
+  }
   drive_emm_Stop_Now(id, sync);
   return ADVANCE_ARM_STATUS_OK;
 }
