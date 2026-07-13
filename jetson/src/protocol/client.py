@@ -72,10 +72,6 @@ class SystemClient:
         payload = struct.pack("<I", jetson_time_ms)
         self._transport.send_command(CmdSet.SYSTEM, SystemCmd.HEARTBEAT, payload)
 
-    def set_mode(self, mode: int) -> None:
-        self._transport.send_command(CmdSet.SYSTEM, SystemCmd.SET_MODE, struct.pack("<B", mode))
-
-
 class SafetyClient:
     def __init__(self, transport: SerialTransport) -> None:
         self._transport = transport
@@ -162,6 +158,28 @@ class ArmClient:
 
     def release(self) -> None:
         self._transport.send_command(CmdSet.SERVO, ServoCmd.ARM_GRAB, b"\x00")
+
+    def pick(self) -> None:
+        self._transport.send_command(CmdSet.SERVO, ServoCmd.ARM_PICK)
+
+    def place(self) -> None:
+        self._transport.send_command(CmdSet.SERVO, ServoCmd.ARM_PLACE)
+
+    def abort(self) -> None:
+        self._transport.send_command(CmdSet.SERVO, ServoCmd.ARM_ABORT)
+
+    def reset_zero(self) -> None:
+        self._transport.send_command(CmdSet.SERVO, ServoCmd.ARM_RESET_ZERO)
+
+    def get_status(self) -> bytes:
+        frame = self._transport.send_command(
+            CmdSet.SERVO,
+            ServoCmd.ARM_GET_STATUS,
+            expect_data=True,
+        )
+        if frame is None:
+            raise RuntimeError("expected arm-status DATA frame")
+        return frame.payload
 
 
 class WitClient:

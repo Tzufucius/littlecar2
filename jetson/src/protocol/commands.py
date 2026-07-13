@@ -53,6 +53,12 @@ class ChassisCmd(IntEnum):
 
 class ServoCmd(IntEnum):
     ARM_GRAB = 0x10
+    ARM_CONFIG = 0x11
+    ARM_PICK = 0x12
+    ARM_PLACE = 0x13
+    ARM_ABORT = 0x14
+    ARM_GET_STATUS = 0x15
+    ARM_RESET_ZERO = 0x16
 
 
 class SensorCmd(IntEnum):

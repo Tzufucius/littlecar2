@@ -35,7 +35,6 @@ class ProtocolHardwareTest(unittest.TestCase):
     def test_system_and_safety_link(self):
         self.car.system.ping()
         self.car.system.heartbeat()
-        self.car.system.set_mode(0)
         self.car.safety.safe_stop(mode=1)
         self.car.safety.clear()
 

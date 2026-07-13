@@ -35,21 +35,6 @@ static uint16_t Chassis_AbsLimitRpm(int16_t rpm)
   return (uint16_t)value;
 }
 
-static int16_t Chassis_ClampSignedRpm(int32_t rpm)
-{
-  if (rpm > (int32_t)CHASSIS_MAX_RPM)
-  {
-    return (int16_t)CHASSIS_MAX_RPM;
-  }
-
-  if (rpm < -(int32_t)CHASSIS_MAX_RPM)
-  {
-    return -(int16_t)CHASSIS_MAX_RPM;
-  }
-
-  return (int16_t)rpm;
-}
-
 static int32_t Chassis_AbsI32(int32_t value)
 {
   return (value < 0) ? -value : value;
@@ -170,11 +155,6 @@ void Chassis_SmoothStop(uint8_t acc)
   Chassis_SetMotorRPMEx(0, 0, 0, 0, acc);
 }
 
-void Chassis_SetMotorRPM(int16_t lf_rpm, int16_t rf_rpm, int16_t lr_rpm, int16_t rr_rpm)
-{
-  Chassis_SetMotorRPMEx(lf_rpm, rf_rpm, lr_rpm, rr_rpm, CHASSIS_DEFAULT_ACC);
-}
-
 void Chassis_SetMotorRPMEx(int16_t lf_rpm, int16_t rf_rpm, int16_t lr_rpm, int16_t rr_rpm, uint8_t acc)
 {
   /* 先装入四个轮子的速度命令，再一次性发送多电机命令。 */
@@ -193,11 +173,6 @@ void Chassis_SetMotorRPMEx(int16_t lf_rpm, int16_t rf_rpm, int16_t lr_rpm, int16
 uint8_t Chassis_IsMotionCommandActive(void)
 {
   return g_chassis_motion_command_active;
-}
-
-void Chassis_SetBodyVelocity(float vx_right_mm_s, float vy_forward_mm_s, float wz_ccw_deg_s)
-{
-  Chassis_SetBodyVelocityEx(vx_right_mm_s, vy_forward_mm_s, wz_ccw_deg_s, CHASSIS_DEFAULT_ACC);
 }
 
 void Chassis_SetBodyVelocityEx(float vx_right_mm_s, float vy_forward_mm_s, float wz_ccw_deg_s, uint8_t acc)
@@ -220,123 +195,6 @@ void Chassis_SetBodyVelocityEx(float vx_right_mm_s, float vy_forward_mm_s, float
 
   Chassis_SetMotorRPMScaledEx(lf, rf, lr, rr, acc);
 }
-
-void Chassis_Forward(uint16_t rpm)
-{
-  Chassis_ForwardEx(rpm, CHASSIS_DEFAULT_ACC);
-}
-
-void Chassis_ForwardEx(uint16_t rpm, uint8_t acc)
-{
-  int16_t speed = Chassis_ClampSignedRpm((int32_t)rpm);
-  Chassis_SetMotorRPMEx(speed, speed, speed, speed, acc);
-}
-
-void Chassis_ForwardPreset(void)
-{
-  Chassis_ForwardEx(CHASSIS_FORWARD_PRESET_RPM, CHASSIS_FORWARD_PRESET_ACC);
-}
-
-void Chassis_Backward(uint16_t rpm)
-{
-  Chassis_BackwardEx(rpm, CHASSIS_DEFAULT_ACC);
-}
-
-void Chassis_BackwardEx(uint16_t rpm, uint8_t acc)
-{
-  int16_t speed = Chassis_ClampSignedRpm((int32_t)rpm);
-  Chassis_SetMotorRPMEx(-speed, -speed, -speed, -speed, acc);
-}
-
-void Chassis_BackwardPreset(void)
-{
-  Chassis_BackwardEx(CHASSIS_BACKWARD_PRESET_RPM, CHASSIS_BACKWARD_PRESET_ACC);
-}
-
-void Chassis_StrafeLeft(uint16_t rpm)
-{
-  Chassis_StrafeLeftEx(rpm, CHASSIS_DEFAULT_ACC);
-}
-
-void Chassis_StrafeLeftEx(uint16_t rpm, uint8_t acc)
-{
-  int16_t speed = Chassis_ClampSignedRpm((int32_t)rpm);
-  Chassis_SetMotorRPMEx(-speed, speed, speed, -speed, acc);
-}
-
-void Chassis_StrafeLeftPreset(void)
-{
-  Chassis_StrafeLeftEx(CHASSIS_STRAFE_PRESET_RPM, CHASSIS_STRAFE_PRESET_ACC);
-}
-
-void Chassis_StrafeRight(uint16_t rpm)
-{
-  Chassis_StrafeRightEx(rpm, CHASSIS_DEFAULT_ACC);
-}
-
-void Chassis_StrafeRightEx(uint16_t rpm, uint8_t acc)
-{
-  int16_t speed = Chassis_ClampSignedRpm((int32_t)rpm);
-  Chassis_SetMotorRPMEx(speed, -speed, -speed, speed, acc);
-}
-
-void Chassis_StrafeRightPreset(void)
-{
-  Chassis_StrafeRightEx(CHASSIS_STRAFE_PRESET_RPM, CHASSIS_STRAFE_PRESET_ACC);
-}
-
-void Chassis_RotateLeft(uint16_t rpm)
-{
-  Chassis_RotateLeftEx(rpm, CHASSIS_DEFAULT_ACC);
-}
-
-void Chassis_RotateLeftEx(uint16_t rpm, uint8_t acc)
-{
-  int16_t speed = Chassis_ClampSignedRpm((int32_t)rpm);
-  Chassis_SetMotorRPMEx(-speed, speed, -speed, speed, acc);
-}
-
-void Chassis_RotateLeftPreset(void)
-{
-  Chassis_RotateLeftEx(CHASSIS_ROTATE_PRESET_RPM, CHASSIS_ROTATE_PRESET_ACC);
-}
-
-void Chassis_RotateRight(uint16_t rpm)
-{
-  Chassis_RotateRightEx(rpm, CHASSIS_DEFAULT_ACC);
-}
-
-void Chassis_RotateRightEx(uint16_t rpm, uint8_t acc)
-{
-  int16_t speed = Chassis_ClampSignedRpm((int32_t)rpm);
-  Chassis_SetMotorRPMEx(speed, -speed, speed, -speed, acc);
-}
-
-void Chassis_RotateRightPreset(void)
-{
-  Chassis_RotateRightEx(CHASSIS_ROTATE_PRESET_RPM, CHASSIS_ROTATE_PRESET_ACC);
-}
-
-void Chassis_DifferentialTurn(int16_t left_rpm, int16_t right_rpm)
-{
-  Chassis_DifferentialTurnEx(left_rpm, right_rpm, CHASSIS_DEFAULT_ACC);
-}
-
-void Chassis_DifferentialTurnEx(int16_t left_rpm, int16_t right_rpm, uint8_t acc)
-{
-  Chassis_SetMotorRPMEx(left_rpm, right_rpm, left_rpm, right_rpm, acc);
-}
-
-void Chassis_DifferentialTurnPreset(void)
-{
-  Chassis_DifferentialTurnEx(CHASSIS_DIFF_LEFT_PRESET_RPM, CHASSIS_DIFF_RIGHT_PRESET_RPM, CHASSIS_DIFF_PRESET_ACC);
-}
-
-void Chassis_MoveMecanum(int16_t forward_rpm, int16_t strafe_rpm, int16_t wz_ccw_rpm)
-{
-  Chassis_MoveMecanumEx(forward_rpm, strafe_rpm, wz_ccw_rpm, CHASSIS_DEFAULT_ACC);
-}
-
 void Chassis_MoveMecanumEx(int16_t forward_rpm, int16_t strafe_rpm, int16_t wz_ccw_rpm, uint8_t acc)
 {
   /*
@@ -350,13 +208,4 @@ void Chassis_MoveMecanumEx(int16_t forward_rpm, int16_t strafe_rpm, int16_t wz_c
   int32_t rr = (int32_t)forward_rpm + strafe_rpm + wz_ccw_rpm;
 
   Chassis_SetMotorRPMScaledEx(lf, rf, lr, rr, acc);
-}
-
-void Chassis_MoveMecanumPreset(void)
-{
-  Chassis_MoveMecanumEx(
-      CHASSIS_MECANUM_FORWARD_PRESET_RPM,
-      CHASSIS_MECANUM_STRAFE_PRESET_RPM,
-      CHASSIS_MECANUM_ROTATE_PRESET_RPM,
-      CHASSIS_MECANUM_PRESET_ACC);
 }
