@@ -136,6 +136,7 @@ HAL_StatusTypeDef drive_emm_MonitorMotor(uint8_t id);
 void drive_emm_Poll(void);
 /** @brief 处理 UART 接收事件。 */
 /** @param huart 产生接收事件的 UART 句柄。 */
+/** @param size 本次接收的数据长度。 */
 void drive_emm_OnUartRxEvent(UART_HandleTypeDef *huart, uint16_t size);
 /** @brief 处理 UART 发送完成事件。 */
 /** @param huart 完成发送的 UART 句柄。 */
