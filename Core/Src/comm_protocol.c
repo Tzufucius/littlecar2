@@ -603,8 +603,9 @@ static void HostProtocol_SendArmStatusData(const HostProtocol_Frame_t *frame)
   payload[0] = (uint8_t)status.task_state;
   payload[1] = (uint8_t)status.lift_position_validity;
   payload[2] = (uint8_t)status.swing_position_validity;
-  payload[3] = status.active;
-  payload[4] = status.faulted;
+  payload[3] = ((status.task_state >= ADVANCE_ARM_TASK_PICK_EXTEND) &&
+                (status.task_state <= ADVANCE_ARM_TASK_COMPLETE)) ? 1U : 0U;
+  payload[4] = (status.task_state == ADVANCE_ARM_TASK_FAULT) ? 1U : 0U;
   HostProtocol_WriteI32(&payload[5], status.lift_current_pulse);
   HostProtocol_WriteI32(&payload[9], status.lift_target_pulse);
   HostProtocol_WriteI32(&payload[13], status.swing_current_pulse);
