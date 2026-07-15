@@ -457,6 +457,184 @@ void drive_emm_Pos_Control(uint8_t addr, uint8_t dir, uint16_t vel, uint8_t acc,
 }
 
 /**
+ * @brief    X 固件速度模式 (0.1RPM)
+ * @param    addr：电机地址
+ * @param    dir ：方向，ZDT_DIR_CW/CCW
+ * @param    vel_0p1rpm ：速度 (0.1RPM)，范围 0 - 30000 (即 3000.0RPM)
+ * @param    acc ：加速度，范围 0 - 255
+ * @param    snF ：同步标志
+ */
+void drive_emm_SetSpeedX(uint8_t addr, uint8_t dir, uint16_t vel_0p1rpm, uint16_t acc, bool snF)
+{
+  __IO static uint8_t cmd[16] = {0};
+
+  if (vel_0p1rpm > 30000U)
+  {
+    vel_0p1rpm = 30000U;
+  }
+
+  // 装载命令
+  cmd[0] = addr;                       // 地址
+  cmd[1] = 0xF6;                       // 功能码 (与Emm相同，但数据段解析不同)
+  cmd[2] = dir;                        // 方向
+  cmd[3] = (uint8_t)(vel_0p1rpm >> 8); // 速度(0.1RPM)高8位
+  cmd[4] = (uint8_t)(vel_0p1rpm >> 0); // 速度(0.1RPM)低8位
+  cmd[5] = acc;                        // 加速度
+  cmd[6] = (uint8_t)snF;               // 多机同步
+  cmd[7] = 0x6B;                       // 校验字节
+
+  // 发送命令
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 8);
+}
+
+/**
+ * @brief    X 固件速度电流模式
+ * @param    addr：电机地址
+ * @param    dir ：方向
+ * @param    acc ：加速度
+ * @param    max_i_ma ：最大电流 (mA)，范围 0 - 5000mA
+ * @param    snF ：同步标志
+ * @param    vel_0p1rpm ：速度 (0.1RPM)
+ */
+void drive_emm_SetSpeedCurrentX(uint8_t addr, uint8_t dir, uint16_t acc, uint16_t max_i_ma, bool snF, uint16_t vel_0p1rpm)
+{
+  __IO static uint8_t cmd[16] = {0};
+
+  if (max_i_ma > 5000U)
+  {
+    max_i_ma = 5000U;
+  }
+  if (vel_0p1rpm > 30000U)
+  {
+    vel_0p1rpm = 30000U;
+  }
+
+  cmd[0] = addr;                       // 地址
+  cmd[1] = 0xC6;                       // 功能码
+  cmd[2] = dir;                        // 方向
+  cmd[3] = (uint8_t)(acc >> 8);        // 加速度高8
+  cmd[4] = (uint8_t)(acc >> 0);        // 加速度低8
+  cmd[5] = (uint8_t)(max_i_ma >> 8);   // 最大电流高8
+  cmd[6] = (uint8_t)(max_i_ma >> 0);   // 最大电流低8
+  cmd[7] = (uint8_t)snF;               // 多机同步
+  cmd[8] = (uint8_t)(vel_0p1rpm >> 8); // 速度高8
+  cmd[9] = (uint8_t)(vel_0p1rpm >> 0); // 速度低8
+  cmd[10] = 0x6B;                      // 校验字节
+
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 11);
+}
+
+/**
+ * @brief    X 固件直通限速位置模式 (0.1°)
+ * @param    addr：电机地址
+ * @param    dir ：方向
+ * @param    max_vel_0p1rpm ：最大速度 (0.1RPM)
+ * @param    angle_0p1deg ：目标角度 (0.1°)
+ * @param    mode ：相对/绝对模式 (ZDT_PosMode_t)
+ * @param    snF ：同步标志
+ */
+void drive_emm_SetDirectPositionX(uint8_t addr, uint8_t dir, uint16_t max_vel_0p1rpm, uint32_t angle_0p1deg, uint8_t mode, bool snF)
+{
+  __IO static uint8_t cmd[16] = {0};
+
+  if (max_vel_0p1rpm > 30000U)
+  {
+    max_vel_0p1rpm = 30000U;
+  }
+
+  cmd[0] = addr;                            // 地址
+  cmd[1] = 0xFB;                            // 功能码
+  cmd[2] = dir;                             // 方向
+  cmd[3] = (uint8_t)(max_vel_0p1rpm >> 8);  // 最大速度高8
+  cmd[4] = (uint8_t)(max_vel_0p1rpm >> 0);  // 最大速度低8
+  cmd[5] = (uint8_t)(angle_0p1deg >> 24);   // 角度 bit24-31
+  cmd[6] = (uint8_t)(angle_0p1deg >> 16);   // 角度 bit16-23
+  cmd[7] = (uint8_t)(angle_0p1deg >> 8);    // 角度 bit8-15
+  cmd[8] = (uint8_t)(angle_0p1deg >> 0);    // 角度 bit0-7
+  cmd[9] = mode;                            // 相对/绝对模式
+  cmd[10] = (uint8_t)snF;                   // 同步
+  cmd[11] = 0x6B;                           // 校验字节
+
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 12);
+}
+
+/**
+ * @brief    X 固件梯形曲线位置模式 (0.1°)
+ * @param    addr：电机地址
+ * @param    dir ：方向
+ * @param    acc_rpm_s ：加速度 (RPM/S)
+ * @param    dec_rpm_s ：减速度 (RPM/S)
+ * @param    max_vel_0p1rpm ：最大速度 (0.1RPM)
+ * @param    angle_0p1deg ：目标角度 (0.1°)
+ * @param    mode ：相对/绝对模式
+ * @param    snF ：同步标志
+ */
+void drive_emm_SetTrapezoidPositionX(uint8_t addr, uint8_t dir, uint16_t acc_rpm_s, uint16_t dec_rpm_s, uint16_t max_vel_0p1rpm, uint32_t angle_0p1deg, uint8_t mode, bool snF)
+{
+  __IO static uint8_t cmd[32] = {0};
+
+  if (max_vel_0p1rpm > 30000U)
+  {
+    max_vel_0p1rpm = 30000U;
+  }
+
+  cmd[0] = addr;                           // 地址
+  cmd[1] = 0xFD;                           // 功能码
+  cmd[2] = dir;                            // 方向
+  cmd[3] = (uint8_t)(acc_rpm_s >> 8);      // 加速加速度高8
+  cmd[4] = (uint8_t)(acc_rpm_s >> 0);      // 加速加速度低8
+  cmd[5] = (uint8_t)(dec_rpm_s >> 8);      // 减速加速度高8
+  cmd[6] = (uint8_t)(dec_rpm_s >> 0);      // 减速加速度低8
+  cmd[7] = (uint8_t)(max_vel_0p1rpm >> 8); // 最大速度高8
+  cmd[8] = (uint8_t)(max_vel_0p1rpm >> 0); // 最大速度低8
+  cmd[9] = (uint8_t)(angle_0p1deg >> 24);  // 角度 bit24-31
+  cmd[10] = (uint8_t)(angle_0p1deg >> 16); // 角度 bit16-23
+  cmd[11] = (uint8_t)(angle_0p1deg >> 8);  // 角度 bit8-15
+  cmd[12] = (uint8_t)(angle_0p1deg >> 0);  // 角度 bit0-7
+  cmd[13] = mode;                          // 模式
+  cmd[14] = (uint8_t)snF;                  // 同步
+  cmd[15] = 0x6B;                          // 校验字节
+
+  HAL_UART_Transmit_DMA(drive_emm_UART, (uint8_t *)cmd, 16);
+}
+
+bool drive_emm_ParseSpeedX(const uint8_t *frame, uint8_t length, int16_t *speed_0p1rpm)
+{
+  if ((frame == NULL) || (length < 5U) || (frame[1] != 0x35U) || (frame[length - 1U] != 0x6BU))
+  {
+    return false;
+  }
+  if (speed_0p1rpm != NULL)
+  {
+    *speed_0p1rpm = DriveEmm_ReadSigned16(&frame[2]);
+  }
+  return true;
+}
+
+bool drive_emm_ParsePositionX(const uint8_t *frame, uint8_t length, int32_t *angle_0p1deg)
+{
+  if ((frame == NULL) || (length < 7U) || (frame[1] != 0x36U) || (frame[length - 1U] != 0x6BU))
+  {
+    return false;
+  }
+  if (angle_0p1deg != NULL)
+  {
+    *angle_0p1deg = DriveEmm_ReadSigned32(&frame[2]);
+  }
+  return true;
+}
+
+float drive_emm_XSpeedToRpm(int16_t speed_0p1rpm)
+{
+  return (float)speed_0p1rpm * 0.1f;
+}
+
+float drive_emm_XPositionToDegree(int32_t angle_0p1deg)
+{
+  return (float)angle_0p1deg * 0.1f;
+}
+
+/**
  * @brief    立即停止
  * @param    addr  ：电机地址
  * @param    snF   ：多机同步标志，false为不启用，true为启用
