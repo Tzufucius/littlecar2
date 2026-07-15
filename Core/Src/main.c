@@ -134,24 +134,24 @@ void testScrewMotor(uint8_t id, bool isX)
 
   if (isX)
   {
-    /* 1. 正转测试 (CW) */
-    drive_emm_SetSpeedX(id, ZDT_DIR_CW, vel_deg_0p1, acc, false);
+    /* 1. 反转测试 (CCW) */
+    drive_emm_SetSpeedX(id, ZDT_DIR_CCW, vel_deg_0p1, acc, false);
     HAL_Delay(2000);
 
     /* 2. 停止 */
     drive_emm_Stop_Now(id, false);
     HAL_Delay(1000);
 
-    /* 3. 反转测试 (CCW) */
-    drive_emm_SetSpeedX(id, ZDT_DIR_CCW, vel_deg_0p1, acc, false);
+    /* 3. 正转测试 (CW) */
+    drive_emm_SetSpeedX(id, ZDT_DIR_CW, vel_deg_0p1, acc, false);
     HAL_Delay(2000);
 
     /* 4. 再次停止 */
     drive_emm_Stop_Now(id, false);
     HAL_Delay(1000);
 
-    /* 5. 梯形位置反向移回 (相对位置) */
-    drive_emm_SetTrapezoidPositionX(id, ZDT_DIR_CW, 100, 100, vel_deg_0p1, one_turn_deg_0p1, ZDT_POS_RELATIVE_CURRENT, false);
+    /* 5. 梯形位置移回 (相对位置，反向 1 圈) */
+    drive_emm_SetTrapezoidPositionX(id, ZDT_DIR_CCW, 100, 100, vel_deg_0p1, one_turn_deg_0p1, ZDT_POS_RELATIVE_CURRENT, false);
     HAL_Delay(3000);
   }
   else
