@@ -33,6 +33,40 @@ extern UART_HandleTypeDef drive_emm_UART_HANDLE;
 
 typedef enum
 {
+  /** @brief 顺时针方向。 */
+  ZDT_DIR_CW = 0U,
+  /** @brief 逆时针方向。 */
+  ZDT_DIR_CCW = 1U
+} ZDT_Dir_t;
+
+typedef enum
+{
+  /** @brief 异步运行。 */
+  ZDT_SYNC_DISABLE = 0U,
+  /** @brief 同步等待触发。 */
+  ZDT_SYNC_ENABLE = 1U
+} ZDT_Sync_t;
+
+typedef enum
+{
+  /** @brief 相对上一次目标位置运动。 */
+  ZDT_POS_RELATIVE_LAST_TARGET = 0x00U,
+  /** @brief 绝对值位置（相对于零点）。 */
+  ZDT_POS_ABSOLUTE_ZERO = 0x01U,
+  /** @brief 相对当前实时位置运动。 */
+  ZDT_POS_RELATIVE_CURRENT = 0x02U
+} ZDT_PosMode_t;
+
+typedef enum
+{
+  /** @brief 任务成功接收。 */
+  ZDT_ACK_SUCCESS = 0x02U,
+  /** @brief 执行条件不满足（如未使能或速度超限）。 */
+  ZDT_ACK_CONDITION_ERROR = 0xE2U
+} ZDT_AckStatus_t;
+
+typedef enum
+{
 	/** @brief 读取总线电压。 */
 	S_VBUS = 5,	  // 读取总线电压
 	/** @brief 读取总线电流。 */
@@ -279,6 +313,64 @@ void drive_emm_Origin_Read_Params(uint8_t addr);
 /** @param sl_ms 切换时间。 */
 /** @param potF 是否启用正限位。 */
 void drive_emm_Origin_Modify_Params(uint8_t addr, bool svF, uint8_t o_mode, uint8_t o_dir, uint16_t o_vel, uint32_t o_tm, uint16_t sl_vel, uint16_t sl_ma, uint16_t sl_ms, bool potF);
+
+/**********************************************************
+*** X 系列固件新增指令 (0.1单位)
+**********************************************************/
+
+/**
+ * @brief    X 固件速度模式 (0.1RPM)
+ * @param    addr：电机地址
+ * @param    dir ：方向，ZDT_DIR_CW/CCW
+ * @param    vel_0p1rpm ：速度 (0.1RPM)
+ * @param    acc ：加速度
+ * @param    snF ：同步标志
+ */
+void drive_emm_SetSpeedX(uint8_t addr, uint8_t dir, uint16_t vel_0p1rpm, uint16_t acc, bool snF);
+
+/**
+ * @brief    X 固件速度电流模式
+ * @param    addr：电机地址
+ * @param    dir ：方向
+ * @param    acc ：加速度
+ * @param    max_i_ma ：最大电流 (mA)
+ * @param    snF ：同步标志
+ * @param    vel_0p1rpm ：速度 (0.1RPM)
+ */
+void drive_emm_SetSpeedCurrentX(uint8_t addr, uint8_t dir, uint16_t acc, uint16_t max_i_ma, bool snF, uint16_t vel_0p1rpm);
+
+/**
+ * @brief    X 固件直通限速位置模式 (0.1°)
+ * @param    addr：电机地址
+ * @param    dir ：方向
+ * @param    max_vel_0p1rpm ：最大速度
+ * @param    angle_0p1deg ：目标角度 (0.1°)
+ * @param    mode ：相对/绝对模式
+ * @param    snF ：同步标志
+ */
+void drive_emm_SetDirectPositionX(uint8_t addr, uint8_t dir, uint16_t max_vel_0p1rpm, uint32_t angle_0p1deg, uint8_t mode, bool snF);
+
+/**
+ * @brief    X 固件梯形曲线位置模式 (0.1°)
+ * @param    addr：电机地址
+ * @param    dir ：方向
+ * @param    acc_rpm_s ：加速度 (RPM/S)
+ * @param    dec_rpm_s ：减速度 (RPM/S)
+ * @param    max_vel_0p1rpm ：最大速度
+ * @param    angle_0p1deg ：目标角度 (0.1°)
+ * @param    mode ：相对/绝对模式
+ * @param    snF ：同步标志
+ */
+void drive_emm_SetTrapezoidPositionX(uint8_t addr, uint8_t dir, uint16_t acc_rpm_s, uint16_t dec_rpm_s, uint16_t max_vel_0p1rpm, uint32_t angle_0p1deg, uint8_t mode, bool snF);
+
+/** @brief 解析 X 固件返回的速度值。 */
+bool drive_emm_ParseSpeedX(const uint8_t *frame, uint8_t length, int16_t *speed_0p1rpm);
+/** @brief 解析 X 固件返回的位置值。 */
+bool drive_emm_ParsePositionX(const uint8_t *frame, uint8_t length, int32_t *angle_0p1deg);
+
+float drive_emm_XSpeedToRpm(int16_t speed_0p1rpm);
+float drive_emm_XPositionToDegree(int32_t angle_0p1deg);
+
 /**********************************************************
 *** 读取系统参数命令
 **********************************************************/
