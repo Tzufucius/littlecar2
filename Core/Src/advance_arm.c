@@ -50,10 +50,10 @@ typedef struct
   const AdvanceArm_Action_t *actions;
   uint8_t action_count;
   AdvanceArm_TaskType_t task_type;
-  uint8_t step;               /* 当前执行的步骤索引 */
-  uint8_t action_started;     /* 标记当前步骤指令是否已下发 */
-  uint32_t step_started_tick; /* 步骤起始时间戳 */
-  uint32_t task_deadline_tick;/* 任务整体超时截止点 */
+  uint8_t step;                /* 当前执行的步骤索引 */
+  uint8_t action_started;      /* 标记当前步骤指令是否已下发 */
+  uint32_t step_started_tick;  /* 步骤起始时间戳 */
+  uint32_t task_deadline_tick; /* 任务整体超时截止点 */
 } AdvanceArm_Executor_t;
 
 /** @brief 机械臂全局控制块 */
@@ -332,8 +332,8 @@ static void AdvanceArm_RunCurrentAction(uint32_t now)
 
   case ARM_ACTION_SET_GRIPPER:
     /* 舵机控制指令，命令成功即认为步骤开始（到位由随后的 WAIT 保证） */
-    if (AdvanceArm_SetServo(g_arm_config.gripper_servo_id, action->acceleration,
-                            action->value, action->speed) != drive_bus_servo_STATUS_OK)
+    if (BusServo_SetPositionEx(g_arm_config.gripper_servo_id, action->acceleration,
+                               action->value, action->speed) != drive_bus_servo_STATUS_OK)
     {
       AdvanceArm_SetFault();
       return;
@@ -402,8 +402,10 @@ bool AdvanceArm_IsFixedConfig(const AdvanceArm_Config_t *config)
 /* 清除旧零点，等待下一次轮询建立软件零点。 */
 AdvanceArm_Status_t AdvanceArm_ResetZero(void)
 {
-  if (g_advance_arm.configured == 0U) return ADVANCE_ARM_STATUS_FAULT;
-  if (g_advance_arm.state == ADVANCE_ARM_RUN_RUNNING) return ADVANCE_ARM_STATUS_BUSY;
+  if (g_advance_arm.configured == 0U)
+    return ADVANCE_ARM_STATUS_FAULT;
+  if (g_advance_arm.state == ADVANCE_ARM_RUN_RUNNING)
+    return ADVANCE_ARM_STATUS_BUSY;
 
   /*
    * 重置坐标系：清空当前零点偏移。
@@ -480,7 +482,8 @@ void AdvanceArm_Poll(void)
   uint8_t lift_healthy;
   uint8_t swing_healthy;
 
-  if (g_advance_arm.configured == 0U) return;
+  if (g_advance_arm.configured == 0U)
+    return;
 
   /* 1. 刷新反馈 */
   lift_healthy = AdvanceArm_UpdateAxis(&g_advance_arm.lift);
@@ -525,7 +528,8 @@ void AdvanceArm_Poll(void)
     return;
   }
 
-  if (g_advance_arm.state != ADVANCE_ARM_RUN_RUNNING) return;
+  if (g_advance_arm.state != ADVANCE_ARM_RUN_RUNNING)
+    return;
 
   /* 超时判定 */
   if ((int32_t)(now - g_advance_arm.executor.task_deadline_tick) >= 0)
@@ -555,7 +559,7 @@ AdvanceArm_Status_t AdvanceArm_StartPlace(void)
 
 /* 启动由调用方提供动作序列的兼容任务。 */
 AdvanceArm_Status_t AdvanceArm_StartLegacyTask(AdvanceArm_TaskType_t task_type,
-                                                const AdvanceArm_TaskPlan_t *plan)
+                                               const AdvanceArm_TaskPlan_t *plan)
 {
   int32_t gripper_position;
 
@@ -600,18 +604,11 @@ AdvanceArm_Status_t AdvanceArm_StartLegacyTask(AdvanceArm_TaskType_t task_type,
 AdvanceArm_Status_t AdvanceArm_Grab(bool closed)
 {
   /* 独立操控夹爪（非阻塞） */
-  return (AdvanceArm_SetServo(g_arm_config.gripper_servo_id, ARM_GRIPPER_ACC,
-                              closed ? ARM_GRIPPER_CLOSE_POS : ARM_GRIPPER_OPEN_POS,
-                              ARM_GRIPPER_SPEED) == drive_bus_servo_STATUS_OK)
+  return (BusServo_SetPositionEx(g_arm_config.gripper_servo_id, ARM_GRIPPER_ACC,
+                                 closed ? ARM_GRIPPER_CLOSE_POS : ARM_GRIPPER_OPEN_POS,
+                                 ARM_GRIPPER_SPEED) == drive_bus_servo_STATUS_OK)
              ? ADVANCE_ARM_STATUS_OK
              : ADVANCE_ARM_STATUS_FAULT;
-}
-
-/* 向指定总线舵机发送位置控制命令。 */
-BusServo_Status_t AdvanceArm_SetServo(uint8_t servo_id, uint16_t acceleration,
-                                      int32_t position, uint16_t speed)
-{
-  return BusServo_SetPositionEx(servo_id, acceleration, position, speed);
 }
 
 /* 控制指定机械臂轴运动，并更新其预期目标坐标。 */
