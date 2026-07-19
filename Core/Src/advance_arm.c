@@ -359,9 +359,10 @@ static void AdvanceArm_RunCurrentAction(uint32_t now)
   }
 }
 
+/* 初始化机械臂控制器、注册电机反馈并进入启动状态。 */
 void AdvanceArm_Init(void)
 {
-  /* Init 只注册并监控两个步进轴，不会自动寻找机械零点。 */
+  /* 初始化只注册并监控两个步进轴，不会自动寻找机械零点。 */
   memset(&g_advance_arm, 0, sizeof(g_advance_arm));
   g_advance_arm.lift.motor_id = g_arm_config.lift_motor_id;
   g_advance_arm.swing.motor_id = g_arm_config.swing_motor_id;
@@ -379,6 +380,7 @@ void AdvanceArm_Init(void)
   AdvanceArm_EnterState(ADVANCE_ARM_RUN_BOOT);
 }
 
+/* 检查传入配置是否与当前固定配置完全一致。 */
 bool AdvanceArm_IsFixedConfig(const AdvanceArm_Config_t *config)
 {
   if (AdvanceArm_ConfigIsValid(config) == 0U)
@@ -397,6 +399,7 @@ bool AdvanceArm_IsFixedConfig(const AdvanceArm_Config_t *config)
          (config->position_tolerance_pulse == g_arm_config.position_tolerance_pulse);
 }
 
+/* 清除旧零点，等待下一次轮询建立软件零点。 */
 AdvanceArm_Status_t AdvanceArm_ResetZero(void)
 {
   if (g_advance_arm.configured == 0U) return ADVANCE_ARM_STATUS_FAULT;
@@ -421,6 +424,7 @@ AdvanceArm_Status_t AdvanceArm_ResetZero(void)
   return ADVANCE_ARM_STATUS_OK;
 }
 
+/* 使两个轴的坐标失效，并清除当前任务状态。 */
 void AdvanceArm_InvalidateCoordinates(void)
 {
   g_advance_arm.lift.validity = ADVANCE_ARM_POSITION_UNKNOWN;
@@ -430,6 +434,7 @@ void AdvanceArm_InvalidateCoordinates(void)
   AdvanceArm_EnterState(ADVANCE_ARM_RUN_BOOT);
 }
 
+/* 中止当前任务、停止已配置轴并使坐标失效。 */
 void AdvanceArm_Abort(void)
 {
   /* 中止任务并失能轴 */
@@ -437,6 +442,7 @@ void AdvanceArm_Abort(void)
   AdvanceArm_InvalidateCoordinates();
 }
 
+/* 执行机械臂紧急停止，并进入紧急停止状态。 */
 void AdvanceArm_EStop(void)
 {
   /* 紧急停止 */
@@ -445,6 +451,7 @@ void AdvanceArm_EStop(void)
   AdvanceArm_EnterState(ADVANCE_ARM_RUN_ESTOP);
 }
 
+/* 读取机械臂当前状态、坐标和任务执行信息。 */
 AdvanceArm_Status_t AdvanceArm_GetStatus(AdvanceArm_RuntimeStatus_t *status)
 {
   if (status == NULL)
@@ -466,6 +473,7 @@ AdvanceArm_Status_t AdvanceArm_GetStatus(AdvanceArm_RuntimeStatus_t *status)
   return ADVANCE_ARM_STATUS_OK;
 }
 
+/* 周期性刷新反馈、建立零点并驱动任务状态机。 */
 void AdvanceArm_Poll(void)
 {
   uint32_t now = HAL_GetTick();
@@ -529,6 +537,7 @@ void AdvanceArm_Poll(void)
   AdvanceArm_RunCurrentAction(now);
 }
 
+/* 启动一轮抓取动作任务。 */
 AdvanceArm_Status_t AdvanceArm_StartPick(void)
 {
   return AdvanceArm_StartTask(ADVANCE_ARM_TASK_PICK, g_pick_actions,
@@ -536,6 +545,7 @@ AdvanceArm_Status_t AdvanceArm_StartPick(void)
                               ARM_TASK_TIMEOUT_MS);
 }
 
+/* 启动一轮放置动作任务。 */
 AdvanceArm_Status_t AdvanceArm_StartPlace(void)
 {
   return AdvanceArm_StartTask(ADVANCE_ARM_TASK_PLACE, g_place_actions,
@@ -543,6 +553,7 @@ AdvanceArm_Status_t AdvanceArm_StartPlace(void)
                               ARM_TASK_TIMEOUT_MS);
 }
 
+/* 启动由调用方提供动作序列的兼容任务。 */
 AdvanceArm_Status_t AdvanceArm_StartLegacyTask(AdvanceArm_TaskType_t task_type,
                                                 const AdvanceArm_TaskPlan_t *plan)
 {
@@ -585,6 +596,7 @@ AdvanceArm_Status_t AdvanceArm_StartLegacyTask(AdvanceArm_TaskType_t task_type,
                               plan->task_timeout_ms);
 }
 
+/* 控制夹爪打开或闭合。 */
 AdvanceArm_Status_t AdvanceArm_Grab(bool closed)
 {
   /* 独立操控夹爪（非阻塞） */
@@ -595,12 +607,14 @@ AdvanceArm_Status_t AdvanceArm_Grab(bool closed)
              : ADVANCE_ARM_STATUS_FAULT;
 }
 
+/* 向指定总线舵机发送位置控制命令。 */
 BusServo_Status_t AdvanceArm_SetServo(uint8_t servo_id, uint16_t acceleration,
                                       int32_t position, uint16_t speed)
 {
   return BusServo_SetPositionEx(servo_id, acceleration, position, speed);
 }
 
+/* 控制指定机械臂轴运动，并更新其预期目标坐标。 */
 AdvanceArm_Status_t AdvanceArm_MoveAxis(uint8_t motor_id,
                                         AdvanceArm_MotorDirection_t direction,
                                         uint16_t velocity, uint8_t acceleration,
@@ -631,6 +645,7 @@ AdvanceArm_Status_t AdvanceArm_MoveAxis(uint8_t motor_id,
   return ADVANCE_ARM_STATUS_OK;
 }
 
+/* 立即停止指定机械臂轴。 */
 AdvanceArm_Status_t AdvanceArm_StopAxis(uint8_t motor_id, bool synchronous)
 {
   if (AdvanceArm_FindAxis(motor_id) == NULL)

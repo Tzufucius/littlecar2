@@ -23,11 +23,13 @@ typedef struct
 
 static AdvanceMotion_Context_t g_motion = {0};
 
+/* 返回浮点数的绝对值。 */
 static float AdvanceMotion_AbsFloat(float value)
 {
   return (value < 0.0f) ? -value : value;
 }
 
+/* 按最大模长限制二维速度向量，同时保持其方向不变。 */
 static float AdvanceMotion_LimitVector(float *vx, float *vy, float max_value)
 {
   float magnitude;
@@ -50,16 +52,19 @@ static float AdvanceMotion_LimitVector(float *vx, float *vy, float max_value)
   return magnitude;
 }
 
+/* 获取目标点的线速度上限，未设置时使用默认值。 */
 static float AdvanceMotion_GetGoalVmax(const WorldGoalPose2D_t *goal)
 {
   return (goal->vmax_mm_s > 0.0f) ? goal->vmax_mm_s : ADVANCE_MOTION_DEFAULT_VMAX_MM_S;
 }
 
+/* 获取目标点的角速度上限，未设置时使用默认值。 */
 static float AdvanceMotion_GetGoalWmax(const WorldGoalPose2D_t *goal)
 {
   return (goal->wmax_deg_s > 0.0f) ? goal->wmax_deg_s : ADVANCE_MOTION_DEFAULT_WMAX_DEG_S;
 }
 
+/* 校验目标位姿、速度上限、超时时间和标志位。 */
 static uint8_t AdvanceMotion_IsGoalValid(const WorldGoalPose2D_t *goal)
 {
   if ((goal == 0) ||
@@ -89,6 +94,7 @@ static uint8_t AdvanceMotion_IsGoalValid(const WorldGoalPose2D_t *goal)
   return 1U;
 }
 
+/* 获取未超时的有效世界坐标，并转换为运动控制状态码。 */
 static AdvanceMotion_Status_t AdvanceMotion_GetFreshPose(WorldPose2D_t *pose)
 {
   AdvanceWorld_Status_t world_status;
@@ -163,12 +169,14 @@ static AdvanceMotion_Status_t AdvanceMotion_ApplyWorldVelocityEx(float vx_world_
   return ADVANCE_MOTION_STATUS_OK;
 }
 
+/* 初始化世界坐标运动控制器。 */
 void AdvanceMotion_Init(void)
 {
   g_motion = (AdvanceMotion_Context_t){0};
   g_motion.state = ADVANCE_MOTION_STATE_IDLE;
 }
 
+/* 设置世界坐标系速度，并取消正在执行的到点任务。 */
 AdvanceMotion_Status_t AdvanceMotion_SetWorldVelocityEx(float vx_world_mm_s, float vy_world_mm_s, float wz_ccw_deg_s, uint8_t acc)
 {
   if (g_motion.state == ADVANCE_MOTION_STATE_RUNNING)
@@ -180,6 +188,7 @@ AdvanceMotion_Status_t AdvanceMotion_SetWorldVelocityEx(float vx_world_mm_s, flo
   return AdvanceMotion_ApplyWorldVelocityEx(vx_world_mm_s, vy_world_mm_s, wz_ccw_deg_s, acc);
 }
 
+/* 设置目标位姿并启动闭环到点运动任务。 */
 AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, uint8_t acc)
 {
   if (AdvanceMotion_IsGoalValid(goal) == 0U)
@@ -201,6 +210,7 @@ AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, u
   return ADVANCE_MOTION_STATUS_OK;
 }
 
+/* 周期性读取世界位姿，计算误差并驱动到点控制状态机。 */
 void AdvanceMotion_Poll(void)
 {
   uint32_t now_tick = HAL_GetTick();
@@ -289,11 +299,13 @@ void AdvanceMotion_Poll(void)
   g_motion.updated_tick = now_tick;
 }
 
+/* 取消当前运动任务并平滑停止底盘。 */
 void AdvanceMotion_Cancel(void)
 {
   AdvanceMotion_SetTerminalState(ADVANCE_MOTION_STATE_CANCELED, CHASSIS_DEFAULT_ACC);
 }
 
+/* 仅在存在运行中任务时取消运动。 */
 void AdvanceMotion_CancelIfActive(void)
 {
   if (g_motion.state == ADVANCE_MOTION_STATE_RUNNING)
@@ -302,6 +314,7 @@ void AdvanceMotion_CancelIfActive(void)
   }
 }
 
+/* 取消当前任务但不向底盘发送停止命令。 */
 void AdvanceMotion_CancelWithoutStop(void)
 {
   if (g_motion.state == ADVANCE_MOTION_STATE_RUNNING)
@@ -313,6 +326,7 @@ void AdvanceMotion_CancelWithoutStop(void)
   }
 }
 
+/* 读取当前运动状态、目标位姿和误差。 */
 AdvanceMotion_Status_t AdvanceMotion_GetStatus(AdvanceMotion_RuntimeStatus_t *status)
 {
   if (status == 0)

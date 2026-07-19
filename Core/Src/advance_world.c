@@ -21,11 +21,13 @@ static volatile WorldPose2D_t g_world_pose = {0};
 static AdvanceWorld_Origin_t g_world_origin = {0};
 static uint32_t g_last_debug_print_tick = 0U;
 
+/* 将角度从度转换为弧度。 */
 static float AdvanceWorld_DegToRad(float deg)
 {
   return deg * ADVANCE_WORLD_PI / 180.0f;
 }
 
+/* 根据方向和零偏修正传感器航向角，并归一化到 [-180, 180]。 */
 static float AdvanceWorld_NormalizeSensorYawDeg(float yaw_deg, uint8_t reversed, float offset_deg)
 {
   if (reversed != 0U)
@@ -36,6 +38,7 @@ static float AdvanceWorld_NormalizeSensorYawDeg(float yaw_deg, uint8_t reversed,
   return AdvanceWorld_WrapAngleDeg(yaw_deg + offset_deg);
 }
 
+/* 读取并修正 OPS 航向角。 */
 static float AdvanceWorld_GetOpsYawDeg(void)
 {
   return AdvanceWorld_NormalizeSensorYawDeg(
@@ -44,6 +47,7 @@ static float AdvanceWorld_GetOpsYawDeg(void)
       ADVANCE_WORLD_OPS_YAW_OFFSET_DEG);
 }
 
+/* 读取并修正 IMU 航向角。 */
 static float AdvanceWorld_GetImuYawDeg(void)
 {
   return AdvanceWorld_NormalizeSensorYawDeg(
@@ -52,16 +56,19 @@ static float AdvanceWorld_GetImuYawDeg(void)
       ADVANCE_WORLD_WIT_YAW_OFFSET_DEG);
 }
 
+/* 判断 OPS 数据是否存在且有效。 */
 static uint8_t AdvanceWorld_HasValidOps(void)
 {
   return ((carpose_ops != NULL) && (carpose_ops->valid != 0U)) ? 1U : 0U;
 }
 
+/* 判断 IMU 航向角数据是否存在且有效。 */
 static uint8_t AdvanceWorld_HasValidImuYaw(void)
 {
   return ((carpose_imu != NULL) && (carpose_imu->angle_deg.valid != 0U)) ? 1U : 0U;
 }
 
+/* 计算相对于世界坐标原点的航向角。 */
 static float AdvanceWorld_GetRelativeYawDeg(void)
 {
   if (g_world_origin.imu_yaw_ready != 0U)
@@ -72,6 +79,7 @@ static float AdvanceWorld_GetRelativeYawDeg(void)
   return AdvanceWorld_WrapAngleDeg(AdvanceWorld_GetOpsYawDeg() - g_world_origin.raw_yaw_deg);
 }
 
+/* 将 OPS 传感器位置换算为底盘旋转中心位置。 */
 static void AdvanceWorld_GetOpsChassisPosition(float *x_mm, float *y_mm)
 {
   float x = carpose_ops->pos_x_mm;
@@ -95,7 +103,7 @@ static void AdvanceWorld_GetOpsChassisPosition(float *x_mm, float *y_mm)
     y = -y;
   }
 
-  /* OPS 坐标通常是传感器位置，转换为底盘旋转中心后再建 world 原点。 */
+  /* OPS 坐标通常是传感器位置，先转换为底盘旋转中心，再建立世界坐标原点。 */
   yaw_rad = AdvanceWorld_DegToRad(AdvanceWorld_GetOpsYawDeg());
   cos_yaw = cosf(yaw_rad);
   sin_yaw = sinf(yaw_rad);
@@ -103,6 +111,7 @@ static void AdvanceWorld_GetOpsChassisPosition(float *x_mm, float *y_mm)
   *y_mm = y - (sin_yaw * ADVANCE_WORLD_OPS_OFFSET_X_MM) - (cos_yaw * ADVANCE_WORLD_OPS_OFFSET_Y_MM);
 }
 
+/* 根据 OPS 和 IMU 反馈更新世界坐标位姿。 */
 static void AdvanceWorld_UpdatePoseFromOps(void)
 {
   float dx_raw;
@@ -144,6 +153,7 @@ static void AdvanceWorld_UpdatePoseFromOps(void)
   g_world_pose.origin_ready = 1U;
 }
 
+/* 初始化世界坐标、原点和调试输出状态。 */
 void AdvanceWorld_Init(void)
 {
   g_world_origin = (AdvanceWorld_Origin_t){0};
@@ -151,6 +161,7 @@ void AdvanceWorld_Init(void)
   g_last_debug_print_tick = 0U;
 }
 
+/* 以当前传感器位置和航向建立世界坐标原点。 */
 AdvanceWorld_Status_t AdvanceWorld_ResetOrigin(void)
 {
   if (AdvanceWorld_HasValidOps() == 0U)
@@ -185,16 +196,19 @@ AdvanceWorld_Status_t AdvanceWorld_ResetOrigin(void)
   return ADVANCE_WORLD_STATUS_OK;
 }
 
+/* 周期性刷新世界坐标位姿。 */
 void AdvanceWorld_Poll(void)
 {
   AdvanceWorld_UpdatePoseFromOps();
 }
 
+/* 返回世界位姿的只读指针。 */
 const volatile WorldPose2D_t *AdvanceWorld_GetPose(void)
 {
   return &g_world_pose;
 }
 
+/* 将当前世界位姿复制到调用方缓冲区。 */
 AdvanceWorld_Status_t AdvanceWorld_GetPoseCopy(WorldPose2D_t *pose)
 {
   if (pose == NULL)
@@ -218,6 +232,7 @@ AdvanceWorld_Status_t AdvanceWorld_GetPoseCopy(WorldPose2D_t *pose)
   return (pose->valid != 0U) ? ADVANCE_WORLD_STATUS_OK : ADVANCE_WORLD_STATUS_NO_OPS;
 }
 
+/* 将角度归一化到 [-180, 180] 度范围。 */
 float AdvanceWorld_WrapAngleDeg(float angle_deg)
 {
   while (angle_deg > 180.0f)
@@ -233,6 +248,7 @@ float AdvanceWorld_WrapAngleDeg(float angle_deg)
   return angle_deg;
 }
 
+/* 将浮点数限制在指定最小值和最大值之间。 */
 float AdvanceWorld_LimitFloat(float value, float min_value, float max_value)
 {
   if (value < min_value)
@@ -248,6 +264,7 @@ float AdvanceWorld_LimitFloat(float value, float min_value, float max_value)
   return value;
 }
 
+/* 将世界坐标系线速度转换为车体坐标系线速度。 */
 void AdvanceWorld_WorldToBodyVelocity(float vx_w, float vy_w, float yaw_deg, float *vx_b, float *vy_b)
 {
   float yaw = AdvanceWorld_DegToRad(yaw_deg);
@@ -263,6 +280,7 @@ void AdvanceWorld_WorldToBodyVelocity(float vx_w, float vy_w, float yaw_deg, flo
   *vy_b = -sin_yaw * vx_w + cos_yaw * vy_w;
 }
 
+/* 将车体坐标系线速度转换为世界坐标系线速度。 */
 void AdvanceWorld_BodyToWorldVelocity(float vx_b, float vy_b, float yaw_deg, float *vx_w, float *vy_w)
 {
   float yaw = AdvanceWorld_DegToRad(yaw_deg);
@@ -278,6 +296,7 @@ void AdvanceWorld_BodyToWorldVelocity(float vx_b, float vy_b, float yaw_deg, flo
   *vy_w = sin_yaw * vx_b + cos_yaw * vy_b;
 }
 
+/* 按配置周期输出传感器原始数据和世界位姿调试信息。 */
 void AdvanceWorld_PrintDebug(void)
 {
 #if (ADVANCE_WORLD_DEBUG_ENABLE != 0U)
