@@ -312,10 +312,11 @@ int main(void)
     App_ToggleLed();
     HAL_Delay(100);
   }
-
+  
+  // 测试
   /* 取消注释以依次执行阻塞测试和非阻塞测试。 */
-  /* AdvanceTest_BlockingMain(); */
-  /* AdvanceTest_NonBlockingMain(); */
+  // AdvanceTest_BlockingMain();
+  // AdvanceTest_NonBlockingMain(); 
 
   /* USER CODE END 2 */
 

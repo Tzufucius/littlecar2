@@ -1,7 +1,16 @@
 {
     "folders": [
         {
+            "name": "MDK-ARM",
             "path": "."
+        },
+        {
+            "name": "Core",
+            "path": "../Core"
+        },
+        {
+            "name": "jetson",
+            "path": "../jetson"
         }
     ],
     "settings": {},
