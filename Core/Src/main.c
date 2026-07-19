@@ -30,6 +30,7 @@
 #include "advance_motion.h"
 #include "advance_world.h"
 #include "advance_arm.h"
+#include "advance_test.h"
 #include "comm_host.h"
 #include "comm_protocol.h"
 #include "car_pose.h"
@@ -121,82 +122,9 @@ int fputc(int ch, FILE *f)
   return ch;
 }
 
-void testScrewMotor(uint8_t id, bool isX)
-{
-  const uint16_t vel_rpm = 150U; // 转速 150 RPM
-  const uint16_t vel_deg_0p1 = vel_rpm * 10U; // 0.1 RPM 单位
-  const uint8_t acc = 10U;
-  const uint32_t one_turn_deg_0p1 = 3600U; // X 模式一圈角度 (360.0°)
-
-  /* 使能电机 */
-  drive_emm_En_Control(id, true, false);
-  HAL_Delay(200);
-
-  if (isX)
-  {
-    /* 1. 反转测试 (CCW) */
-    drive_emm_SetSpeedX(id, ZDT_DIR_CCW, vel_deg_0p1, acc, false);
-    HAL_Delay(2000);
-
-    /* 2. 停止 */
-    drive_emm_Stop_Now(id, false);
-    HAL_Delay(1000);
-
-    /* 3. 正转测试 (CW) */
-    drive_emm_SetSpeedX(id, ZDT_DIR_CW, vel_deg_0p1, acc, false);
-    HAL_Delay(2000);
-
-    /* 4. 再次停止 */
-    drive_emm_Stop_Now(id, false);
-    HAL_Delay(1000);
-
-    /* 5. 梯形位置移回 (相对位置，反向 1 圈) */
-    drive_emm_SetTrapezoidPositionX(id, ZDT_DIR_CCW, 100, 100, vel_deg_0p1, one_turn_deg_0p1, ZDT_POS_RELATIVE_CURRENT, false);
-    HAL_Delay(3000);
-  }
-  else
-  {
-    /* Emm 固件测试 */
-    drive_emm_Vel_Control(id, 0U, vel_rpm, acc, false);
-    HAL_Delay(2000);
-    drive_emm_Stop_Now(id, false);
-    HAL_Delay(1000);
-    drive_emm_Vel_Control(id, 1U, vel_rpm, acc, false);
-    HAL_Delay(2000);
-    drive_emm_Stop_Now(id, false);
-    HAL_Delay(1000);
-  }
-}
-
 static void App_ToggleLed(void)
 {
   HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_9 | GPIO_PIN_10);
-}
-
-void test() // 测试的东西全写在里面
-{
-  /*
-   * 循环测试逻辑：
-   * 针对丝杠电机测试，请根据实际固件类型调整 isX 参数
-   * ID 5 通常是丝杠电机
-   */
-  uint8_t screw_id = 5;
-  bool is_screw_x_firmware = true; // <--- 如果是新版电机请保持 true
-
-  // 广播使能所有电机
-  drive_emm_En_Control(0, true, false);
-  HAL_Delay(200);
-
-  while (1)
-  {
-    App_ToggleLed();
-
-    // 执行丝杠电机测试
-    testScrewMotor(screw_id, is_screw_x_firmware);
-
-    // 间隔一段时间再次循环
-    HAL_Delay(3000);
-  }
 }
 
 static uint32_t App_TakePendingTasks(void)
@@ -262,6 +190,7 @@ static void App_RunScheduledTasks(uint32_t pending)
   if ((pending & APP_TASK_MOTION) != 0U)
   {
     AdvanceMotion_Poll();
+    AdvanceTest_NonBlockingPoll();
   }
 
   if ((pending & APP_TASK_LED) != 0U)
@@ -384,8 +313,9 @@ int main(void)
     HAL_Delay(100);
   }
 
-  // 3. 进入测试
-  test();
+  /* 取消注释以依次执行阻塞测试和非阻塞测试。 */
+  /* AdvanceTest_BlockingMain(); */
+  /* AdvanceTest_NonBlockingMain(); */
 
   /* USER CODE END 2 */
 
