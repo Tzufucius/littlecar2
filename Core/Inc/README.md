@@ -15,6 +15,7 @@
 - `advance_chassis.h`：麦克纳姆底盘高级运动接口。
 - `advance_world.h`：全局坐标系、world 位姿和坐标变换接口。
 - `advance_arm.h`：机械臂闭环控制器接口，含人工置零后的坐标有效性、非阻塞抓取/放置任务与故障状态。
+- `advance_test.h`：下位机人工联调接口，提供阻塞式和非阻塞式底盘组合测试。
 
 `CMDSET_SERVO (0x04)` 的机械臂扩展命令：
 

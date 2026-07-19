@@ -149,9 +149,6 @@ extern "C"
 
   /** @brief 控制夹爪打开或闭合。 */
   AdvanceArm_Status_t AdvanceArm_Grab(bool closed);
-  /** @brief 向指定舵机发送位置控制命令。 */
-  BusServo_Status_t AdvanceArm_SetServo(uint8_t servo_id, uint16_t acceleration,
-                                        int32_t position, uint16_t speed);
   /** @brief 控制指定轴按绝对或相对方式运动。 */
   AdvanceArm_Status_t AdvanceArm_MoveAxis(uint8_t motor_id,
                                           AdvanceArm_MotorDirection_t direction,

@@ -15,3 +15,4 @@
 - `advance_chassis.c`：基于 `drive_emm` 多电机命令实现底盘前进、后退、平移、旋转和差速转向。
 - `advance_world.c`：基于 OPS 原始位姿维护工程 world 坐标系，并提供 world/base 坐标变换。
 - `advance_arm.c`：机械臂闭环任务状态机；以新鲜的 ZDT 反馈确认步进轴到位，舵机暂以可配置等待时间完成动作。
+- `advance_test.c`：下位机人工联调实现；阻塞测试用于基础方向确认，非阻塞测试使用动作脚本并由主循环轮询推进。

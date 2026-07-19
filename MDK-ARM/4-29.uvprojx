@@ -449,6 +449,11 @@
               <FilePath>../Core/Src/advance_arm.c</FilePath>
             </File>
             <File>
+              <FileName>advance_test.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/advance_test.c</FilePath>
+            </File>
+            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/main.c</FilePath>

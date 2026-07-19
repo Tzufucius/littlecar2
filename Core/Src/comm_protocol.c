@@ -3,6 +3,7 @@
 #include "advance_motion.h"
 #include "advance_world.h"
 #include "advance_arm.h"
+#include "drive_bus_servo.h"
 #include <stdbool.h>
 #include <string.h>
 
@@ -1067,12 +1068,12 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
     }
     arm_status = (frame->payload_len == HOST_PROTOCOL_PAYLOAD_LEN_FLAG)
                      ? AdvanceArm_Grab(frame->payload[0] != 0U)
-                     : ((AdvanceArm_SetServo(frame->payload[1],
-                                             HostProtocol_ReadU16(&frame->payload[10]),
-                                             (frame->payload[0] != 0U)
-                                                 ? HostProtocol_ReadI32(&frame->payload[6])
-                                                 : HostProtocol_ReadI32(&frame->payload[2]),
-                                             HostProtocol_ReadU16(&frame->payload[12])) == drive_bus_servo_STATUS_OK)
+                     : ((BusServo_SetPositionEx(frame->payload[1],
+                                                HostProtocol_ReadU16(&frame->payload[10]),
+                                                (frame->payload[0] != 0U)
+                                                    ? HostProtocol_ReadI32(&frame->payload[6])
+                                                    : HostProtocol_ReadI32(&frame->payload[2]),
+                                                HostProtocol_ReadU16(&frame->payload[12])) == drive_bus_servo_STATUS_OK)
                             ? ADVANCE_ARM_STATUS_OK
                             : ADVANCE_ARM_STATUS_FAULT);
     g_arm_ack_detail = (uint8_t)arm_status;
