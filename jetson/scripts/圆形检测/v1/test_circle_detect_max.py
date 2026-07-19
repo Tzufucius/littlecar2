@@ -178,7 +178,7 @@ def main():
         "outlier_tol": 10        # 聚合时，如果某个环拟合的中心偏离大部队超过 10 像素，剔除它
     }
 
-    img_addr = r"F:\Project\littleCar2\zhengdian\4-29\jetson\scripts\circle\(567, 685).jpg"
+    img_addr = r"F:\Project\littleCar2\zhengdian\4-29\jetson\scripts\circle\(169, 244).jpg"
     process_subpixel_lsq(img_addr, params)
 
 if __name__ == "__main__":
