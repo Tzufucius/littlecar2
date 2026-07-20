@@ -1080,7 +1080,7 @@ def main():
         # =========================
         "mode": "single",  # "single" 或 "folder"
 
-        "image_path": r"F:\Project\littleCar2\zhengdian\4-29\jetson\scripts\circle\(567, 685).jpg",
+        "image_path": r"F:\Project\littleCar2\zhengdian\4-29\jetson\scripts\circle\(169, 244).jpg",
         "image_dir": r"F:\Project\littleCar2\zhengdian\4-29\jetson\scripts\circle",
 
         "show": True,
