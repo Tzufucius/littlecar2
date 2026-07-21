@@ -50,7 +50,6 @@ extern "C" {
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
-/** @brief 处理系统级不可恢复错误。 */
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
@@ -58,6 +57,18 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define LIFT_UP_LIMIT_Pin GPIO_PIN_0
+#define LIFT_UP_LIMIT_GPIO_Port GPIOC
+#define LIFT_UP_LIMIT_EXTI_IRQn EXTI0_IRQn
+#define LIFT_DOWN_LIMIT_Pin GPIO_PIN_1
+#define LIFT_DOWN_LIMIT_GPIO_Port GPIOC
+#define LIFT_DOWN_LIMIT_EXTI_IRQn EXTI1_IRQn
+#define SLIDE_FRONT_LIMIT_Pin GPIO_PIN_2
+#define SLIDE_FRONT_LIMIT_GPIO_Port GPIOC
+#define SLIDE_FRONT_LIMIT_EXTI_IRQn EXTI2_IRQn
+#define SLIDE_REAR_LIMIT_Pin GPIO_PIN_3
+#define SLIDE_REAR_LIMIT_GPIO_Port GPIOC
+#define SLIDE_REAR_LIMIT_EXTI_IRQn EXTI3_IRQn
 
 /* USER CODE BEGIN Private defines */
 
