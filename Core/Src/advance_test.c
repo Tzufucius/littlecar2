@@ -64,147 +64,359 @@ static void AdvanceTest_ExecuteAction(const AdvanceTest_Action_t *action)
 
 void AdvanceTest_BlockingMain(void)
 {
-  printf("[TEST] four chassis motor layered test start\r\n");
+  DriveEmm_MotorFeedback_t feedback;
+  DriveEmm_Diagnostics_t diagnostics;
+  int32_t target_pulse;
+  uint16_t poll_count;
+  uint8_t reached;
 
-  printf("[TEST] layer 1: drive_emm direct motor control\r\n");
+  printf("[TEST] drive normal control modes start\r\n");
+  if (drive_emm_GetDiagnostics(&diagnostics) == HAL_OK)
+  {
+    printf("[TEST][DRIVE] diag q=%u/%u active=%u wait=%u txerr=%lu rx=%lu bad=%lu unknown=%lu timeout=%lu\r\n",
+           (unsigned int)diagnostics.tx_queue_count, (unsigned int)diagnostics.tx_queue_depth,
+           (unsigned int)diagnostics.tx_active, (unsigned int)diagnostics.query_waiting,
+           (unsigned long)diagnostics.tx_error_count, (unsigned long)diagnostics.rx_reply_count,
+           (unsigned long)diagnostics.rx_invalid_frame_count,
+           (unsigned long)diagnostics.rx_unknown_motor_count,
+           (unsigned long)diagnostics.query_timeout_count);
+  }
+
   printf("[TEST][DRIVE] ID1 enable\r\n");
   drive_emm_En_Control(1, true, false);
   HAL_Delay(200);
-  printf("[TEST][DRIVE] ID1 forward\r\n");
+  printf("[TEST][DRIVE] ID1 normal velocity CW\r\n");
   drive_emm_Vel_Control(1, ZDT_DIR_CW, 150, 10, false);
-  HAL_Delay(2000);
+  // for (poll_count = 0; poll_count < 100; ++poll_count)
+  // {
+  //   drive_emm_Poll();
+  //   HAL_Delay(20);
+  // }
+  HAL_Delay(1000);
   drive_emm_Stop_Now(1, false);
   HAL_Delay(1000);
-  printf("[TEST][DRIVE] ID1 reverse\r\n");
+  printf("[TEST][DRIVE] ID1 normal velocity CCW\r\n");
   drive_emm_Vel_Control(1, ZDT_DIR_CCW, 150, 10, false);
-  HAL_Delay(2000);
+  // for (poll_count = 0; poll_count < 100; ++poll_count)
+  // {
+  //   drive_emm_Poll();
+  //   HAL_Delay(20);
+  // }
+  HAL_Delay(1000);
   drive_emm_Stop_Now(1, false);
   HAL_Delay(1000);
+
+  printf("[TEST][DRIVE] ID1 normal position CW\r\n");
+  reached = 0U;
+  if (drive_emm_GetMotorFeedback(1, &feedback) == HAL_OK && feedback.valid != 0U)
+  {
+    target_pulse = feedback.position + 3200;
+    drive_emm_Pos_Control(1, ZDT_DIR_CW, 150, 10, 3200, false, false);
+    for (poll_count = 0; poll_count < 250; ++poll_count)
+    {
+      drive_emm_Poll();
+      if (drive_emm_IsMotorReached(1, target_pulse, 100, 500) != 0U)
+      {
+        reached = 1U;
+        break;
+      }
+      HAL_Delay(20);
+    }
+    printf("[TEST][DRIVE] ID1 position CW reached=%u target=%ld\r\n",
+           (unsigned int)reached, (long)target_pulse);
+  }
+  else
+  {
+    printf("[TEST][DRIVE] ID1 position CW feedback invalid\r\n");
+  }
+  drive_emm_Stop_Now(1, false);
+  HAL_Delay(1000);
+
+  printf("[TEST][DRIVE] ID1 normal position CCW\r\n");
+  reached = 0U;
+  if (drive_emm_GetMotorFeedback(1, &feedback) == HAL_OK && feedback.valid != 0U)
+  {
+    target_pulse = feedback.position - 3200;
+    drive_emm_Pos_Control(1, ZDT_DIR_CCW, 150, 10, 3200, false, false);
+    for (poll_count = 0; poll_count < 250; ++poll_count)
+    {
+      drive_emm_Poll();
+      if (drive_emm_IsMotorReached(1, target_pulse, 100, 500) != 0U)
+      {
+        reached = 1U;
+        break;
+      }
+      HAL_Delay(20);
+    }
+    printf("[TEST][DRIVE] ID1 position CCW reached=%u target=%ld\r\n",
+           (unsigned int)reached, (long)target_pulse);
+  }
+  else
+  {
+    printf("[TEST][DRIVE] ID1 position CCW feedback invalid\r\n");
+  }
+  drive_emm_Stop_Now(1, false);
+  HAL_Delay(1000);
+  if (drive_emm_GetMotorFeedback(1, &feedback) == HAL_OK)
+  {
+    printf("[TEST][DRIVE] ID1 feedback pos=%ld speed=%d en=%u stall=%u fault=%u valid=%u\r\n",
+           (long)feedback.position, (int)feedback.speed_rpm,
+           (unsigned int)feedback.enabled, (unsigned int)feedback.stalled,
+           (unsigned int)feedback.fault, (unsigned int)feedback.valid);
+  }
   drive_emm_En_Control(1, false, false);
   printf("[TEST][DRIVE] ID1 complete\r\n");
 
   printf("[TEST][DRIVE] ID2 enable\r\n");
   drive_emm_En_Control(2, true, false);
   HAL_Delay(200);
-  printf("[TEST][DRIVE] ID2 forward\r\n");
+  printf("[TEST][DRIVE] ID2 normal velocity CW\r\n");
   drive_emm_Vel_Control(2, ZDT_DIR_CW, 150, 10, false);
-  HAL_Delay(2000);
+  for (poll_count = 0; poll_count < 100; ++poll_count)
+  {
+    drive_emm_Poll();
+    HAL_Delay(20);
+  }
   drive_emm_Stop_Now(2, false);
   HAL_Delay(1000);
-  printf("[TEST][DRIVE] ID2 reverse\r\n");
+  printf("[TEST][DRIVE] ID2 normal velocity CCW\r\n");
   drive_emm_Vel_Control(2, ZDT_DIR_CCW, 150, 10, false);
-  HAL_Delay(2000);
+  for (poll_count = 0; poll_count < 100; ++poll_count)
+  {
+    drive_emm_Poll();
+    HAL_Delay(20);
+  }
   drive_emm_Stop_Now(2, false);
   HAL_Delay(1000);
+  printf("[TEST][DRIVE] ID2 normal position CW\r\n");
+  reached = 0U;
+  if (drive_emm_GetMotorFeedback(2, &feedback) == HAL_OK && feedback.valid != 0U)
+  {
+    target_pulse = feedback.position + 3200;
+    drive_emm_Pos_Control(2, ZDT_DIR_CW, 150, 10, 3200, false, false);
+    for (poll_count = 0; poll_count < 250; ++poll_count)
+    {
+      drive_emm_Poll();
+      if (drive_emm_IsMotorReached(2, target_pulse, 100, 500) != 0U)
+      {
+        reached = 1U;
+        break;
+      }
+      HAL_Delay(20);
+    }
+    printf("[TEST][DRIVE] ID2 position CW reached=%u target=%ld\r\n", (unsigned int)reached, (long)target_pulse);
+  }
+  else
+  {
+    printf("[TEST][DRIVE] ID2 position CW feedback invalid\r\n");
+  }
+  drive_emm_Stop_Now(2, false);
+  HAL_Delay(1000);
+  printf("[TEST][DRIVE] ID2 normal position CCW\r\n");
+  reached = 0U;
+  if (drive_emm_GetMotorFeedback(2, &feedback) == HAL_OK && feedback.valid != 0U)
+  {
+    target_pulse = feedback.position - 3200;
+    drive_emm_Pos_Control(2, ZDT_DIR_CCW, 150, 10, 3200, false, false);
+    for (poll_count = 0; poll_count < 250; ++poll_count)
+    {
+      drive_emm_Poll();
+      if (drive_emm_IsMotorReached(2, target_pulse, 100, 500) != 0U)
+      {
+        reached = 1U;
+        break;
+      }
+      HAL_Delay(20);
+    }
+    printf("[TEST][DRIVE] ID2 position CCW reached=%u target=%ld\r\n", (unsigned int)reached, (long)target_pulse);
+  }
+  else
+  {
+    printf("[TEST][DRIVE] ID2 position CCW feedback invalid\r\n");
+  }
+  drive_emm_Stop_Now(2, false);
+  HAL_Delay(1000);
+  if (drive_emm_GetMotorFeedback(2, &feedback) == HAL_OK)
+  {
+    printf("[TEST][DRIVE] ID2 feedback pos=%ld speed=%d en=%u stall=%u fault=%u valid=%u\r\n",
+           (long)feedback.position, (int)feedback.speed_rpm,
+           (unsigned int)feedback.enabled, (unsigned int)feedback.stalled,
+           (unsigned int)feedback.fault, (unsigned int)feedback.valid);
+  }
   drive_emm_En_Control(2, false, false);
   printf("[TEST][DRIVE] ID2 complete\r\n");
 
   printf("[TEST][DRIVE] ID3 enable\r\n");
   drive_emm_En_Control(3, true, false);
   HAL_Delay(200);
-  printf("[TEST][DRIVE] ID3 forward\r\n");
+  printf("[TEST][DRIVE] ID3 normal velocity CW\r\n");
   drive_emm_Vel_Control(3, ZDT_DIR_CW, 150, 10, false);
-  HAL_Delay(2000);
+  for (poll_count = 0; poll_count < 100; ++poll_count)
+  {
+    drive_emm_Poll();
+    HAL_Delay(20);
+  }
   drive_emm_Stop_Now(3, false);
   HAL_Delay(1000);
-  printf("[TEST][DRIVE] ID3 reverse\r\n");
+  printf("[TEST][DRIVE] ID3 normal velocity CCW\r\n");
   drive_emm_Vel_Control(3, ZDT_DIR_CCW, 150, 10, false);
-  HAL_Delay(2000);
+  for (poll_count = 0; poll_count < 100; ++poll_count)
+  {
+    drive_emm_Poll();
+    HAL_Delay(20);
+  }
   drive_emm_Stop_Now(3, false);
   HAL_Delay(1000);
+  printf("[TEST][DRIVE] ID3 normal position CW\r\n");
+  reached = 0U;
+  if (drive_emm_GetMotorFeedback(3, &feedback) == HAL_OK && feedback.valid != 0U)
+  {
+    target_pulse = feedback.position + 3200;
+    drive_emm_Pos_Control(3, ZDT_DIR_CW, 150, 10, 3200, false, false);
+    for (poll_count = 0; poll_count < 250; ++poll_count)
+    {
+      drive_emm_Poll();
+      if (drive_emm_IsMotorReached(3, target_pulse, 100, 500) != 0U)
+      {
+        reached = 1U;
+        break;
+      }
+      HAL_Delay(20);
+    }
+    printf("[TEST][DRIVE] ID3 position CW reached=%u target=%ld\r\n", (unsigned int)reached, (long)target_pulse);
+  }
+  else
+  {
+    printf("[TEST][DRIVE] ID3 position CW feedback invalid\r\n");
+  }
+  drive_emm_Stop_Now(3, false);
+  HAL_Delay(1000);
+  printf("[TEST][DRIVE] ID3 normal position CCW\r\n");
+  reached = 0U;
+  if (drive_emm_GetMotorFeedback(3, &feedback) == HAL_OK && feedback.valid != 0U)
+  {
+    target_pulse = feedback.position - 3200;
+    drive_emm_Pos_Control(3, ZDT_DIR_CCW, 150, 10, 3200, false, false);
+    for (poll_count = 0; poll_count < 250; ++poll_count)
+    {
+      drive_emm_Poll();
+      if (drive_emm_IsMotorReached(3, target_pulse, 100, 500) != 0U)
+      {
+        reached = 1U;
+        break;
+      }
+      HAL_Delay(20);
+    }
+    printf("[TEST][DRIVE] ID3 position CCW reached=%u target=%ld\r\n", (unsigned int)reached, (long)target_pulse);
+  }
+  else
+  {
+    printf("[TEST][DRIVE] ID3 position CCW feedback invalid\r\n");
+  }
+  drive_emm_Stop_Now(3, false);
+  HAL_Delay(1000);
+  if (drive_emm_GetMotorFeedback(3, &feedback) == HAL_OK)
+  {
+    printf("[TEST][DRIVE] ID3 feedback pos=%ld speed=%d en=%u stall=%u fault=%u valid=%u\r\n",
+           (long)feedback.position, (int)feedback.speed_rpm,
+           (unsigned int)feedback.enabled, (unsigned int)feedback.stalled,
+           (unsigned int)feedback.fault, (unsigned int)feedback.valid);
+  }
   drive_emm_En_Control(3, false, false);
   printf("[TEST][DRIVE] ID3 complete\r\n");
 
   printf("[TEST][DRIVE] ID4 enable\r\n");
   drive_emm_En_Control(4, true, false);
   HAL_Delay(200);
-  printf("[TEST][DRIVE] ID4 forward\r\n");
+  printf("[TEST][DRIVE] ID4 normal velocity CW\r\n");
   drive_emm_Vel_Control(4, ZDT_DIR_CW, 150, 10, false);
-  HAL_Delay(2000);
+  for (poll_count = 0; poll_count < 100; ++poll_count)
+  {
+    drive_emm_Poll();
+    HAL_Delay(20);
+  }
   drive_emm_Stop_Now(4, false);
   HAL_Delay(1000);
-  printf("[TEST][DRIVE] ID4 reverse\r\n");
+  printf("[TEST][DRIVE] ID4 normal velocity CCW\r\n");
   drive_emm_Vel_Control(4, ZDT_DIR_CCW, 150, 10, false);
-  HAL_Delay(2000);
+  for (poll_count = 0; poll_count < 100; ++poll_count)
+  {
+    drive_emm_Poll();
+    HAL_Delay(20);
+  }
   drive_emm_Stop_Now(4, false);
   HAL_Delay(1000);
+  printf("[TEST][DRIVE] ID4 normal position CW\r\n");
+  reached = 0U;
+  if (drive_emm_GetMotorFeedback(4, &feedback) == HAL_OK && feedback.valid != 0U)
+  {
+    target_pulse = feedback.position + 3200;
+    drive_emm_Pos_Control(4, ZDT_DIR_CW, 150, 10, 3200, false, false);
+    for (poll_count = 0; poll_count < 250; ++poll_count)
+    {
+      drive_emm_Poll();
+      if (drive_emm_IsMotorReached(4, target_pulse, 100, 500) != 0U)
+      {
+        reached = 1U;
+        break;
+      }
+      HAL_Delay(20);
+    }
+    printf("[TEST][DRIVE] ID4 position CW reached=%u target=%ld\r\n", (unsigned int)reached, (long)target_pulse);
+  }
+  else
+  {
+    printf("[TEST][DRIVE] ID4 position CW feedback invalid\r\n");
+  }
+  drive_emm_Stop_Now(4, false);
+  HAL_Delay(1000);
+  printf("[TEST][DRIVE] ID4 normal position CCW\r\n");
+  reached = 0U;
+  if (drive_emm_GetMotorFeedback(4, &feedback) == HAL_OK && feedback.valid != 0U)
+  {
+    target_pulse = feedback.position - 3200;
+    drive_emm_Pos_Control(4, ZDT_DIR_CCW, 150, 10, 3200, false, false);
+    for (poll_count = 0; poll_count < 250; ++poll_count)
+    {
+      drive_emm_Poll();
+      if (drive_emm_IsMotorReached(4, target_pulse, 100, 500) != 0U)
+      {
+        reached = 1U;
+        break;
+      }
+      HAL_Delay(20);
+    }
+    printf("[TEST][DRIVE] ID4 position CCW reached=%u target=%ld\r\n", (unsigned int)reached, (long)target_pulse);
+  }
+  else
+  {
+    printf("[TEST][DRIVE] ID4 position CCW feedback invalid\r\n");
+  }
+  drive_emm_Stop_Now(4, false);
+  HAL_Delay(1000);
+  if (drive_emm_GetMotorFeedback(4, &feedback) == HAL_OK)
+  {
+    printf("[TEST][DRIVE] ID4 feedback pos=%ld speed=%d en=%u stall=%u fault=%u valid=%u\r\n",
+           (long)feedback.position, (int)feedback.speed_rpm,
+           (unsigned int)feedback.enabled, (unsigned int)feedback.stalled,
+           (unsigned int)feedback.fault, (unsigned int)feedback.valid);
+  }
   drive_emm_En_Control(4, false, false);
-  printf("[TEST][DRIVE] ID4 complete\r\n");
-
-  printf("[TEST] layer 2: advance_chassis single-wheel mapping\r\n");
-  Chassis_Enable(true);
-  printf("[TEST][CHASSIS] ID1 forward\r\n");
-  Chassis_SetMotorRPMEx(150, 0, 0, 0, 10);
-  HAL_Delay(2000);
-  Chassis_SmoothStop(10);
-  HAL_Delay(1000);
-  printf("[TEST][CHASSIS] ID1 reverse\r\n");
-  Chassis_SetMotorRPMEx(-150, 0, 0, 0, 10);
-  HAL_Delay(2000);
-  Chassis_SmoothStop(10);
-  HAL_Delay(1000);
-
-  printf("[TEST][CHASSIS] ID2 forward\r\n");
-  Chassis_SetMotorRPMEx(0, 0, 150, 0, 10);
-  HAL_Delay(2000);
-  Chassis_SmoothStop(10);
-  HAL_Delay(1000);
-  printf("[TEST][CHASSIS] ID2 reverse\r\n");
-  Chassis_SetMotorRPMEx(0, 0, -150, 0, 10);
-  HAL_Delay(2000);
-  Chassis_SmoothStop(10);
-  HAL_Delay(1000);
-
-  printf("[TEST][CHASSIS] ID3 forward\r\n");
-  Chassis_SetMotorRPMEx(0, 150, 0, 0, 10);
-  HAL_Delay(2000);
-  Chassis_SmoothStop(10);
-  HAL_Delay(1000);
-  printf("[TEST][CHASSIS] ID3 reverse\r\n");
-  Chassis_SetMotorRPMEx(0, -150, 0, 0, 10);
-  HAL_Delay(2000);
-  Chassis_SmoothStop(10);
-  HAL_Delay(1000);
-
-  printf("[TEST][CHASSIS] ID4 forward\r\n");
-  Chassis_SetMotorRPMEx(0, 0, 0, 150, 10);
-  HAL_Delay(2000);
-  Chassis_SmoothStop(10);
-  HAL_Delay(1000);
-  printf("[TEST][CHASSIS] ID4 reverse\r\n");
-  Chassis_SetMotorRPMEx(0, 0, 0, -150, 10);
-  HAL_Delay(2000);
-  Chassis_SmoothStop(10);
-  HAL_Delay(1000);
-
-  printf("[TEST] layer 3: advance_chassis vehicle motion\r\n");
-  printf("[TEST][ADVANCE] mecanum forward\r\n");
-  Chassis_MoveMecanumEx(150, 0, 0, 10);
-  HAL_Delay(2000);
-  Chassis_SmoothStop(10);
-  HAL_Delay(1000);
-
-  printf("[TEST][ADVANCE] mecanum reverse\r\n");
-  Chassis_MoveMecanumEx(-150, 0, 0, 10);
-  HAL_Delay(2000);
-  Chassis_SmoothStop(10);
-  HAL_Delay(1000);
-
-  printf("[TEST][ADVANCE] mecanum rotate CCW\r\n");
-  Chassis_MoveMecanumEx(0, 0, 150, 10);
-  HAL_Delay(2000);
-  Chassis_SmoothStop(10);
-  HAL_Delay(1000);
-
-  printf("[TEST][ADVANCE] body velocity\r\n");
-  Chassis_SetBodyVelocityEx(0.0f, 100.0f, 0.0f, 10);
-  HAL_Delay(2000);
-  Chassis_SmoothStop(10);
-  HAL_Delay(1000);
-
-  Chassis_Stop();
-  Chassis_Enable(false);
-  printf("[TEST] four chassis motor layered test complete\r\n");
+  drive_emm_Stop_Now(1, false);
+  drive_emm_Stop_Now(2, false);
+  drive_emm_Stop_Now(3, false);
+  drive_emm_Stop_Now(4, false);
+  if (drive_emm_GetDiagnostics(&diagnostics) == HAL_OK)
+  {
+    printf("[TEST][DRIVE] diag q=%u/%u active=%u wait=%u txerr=%lu rx=%lu bad=%lu unknown=%lu timeout=%lu\r\n",
+           (unsigned int)diagnostics.tx_queue_count, (unsigned int)diagnostics.tx_queue_depth,
+           (unsigned int)diagnostics.tx_active, (unsigned int)diagnostics.query_waiting,
+           (unsigned long)diagnostics.tx_error_count, (unsigned long)diagnostics.rx_reply_count,
+           (unsigned long)diagnostics.rx_invalid_frame_count,
+           (unsigned long)diagnostics.rx_unknown_motor_count,
+           (unsigned long)diagnostics.query_timeout_count);
+  }
+  printf("[TEST] drive normal control modes complete\r\n");
 }
 
 void AdvanceTest_NonBlockingMain(void)

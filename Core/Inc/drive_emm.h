@@ -117,6 +117,8 @@ extern __IO uint16_t MMCL_count, MMCL_cmd[MMCL_LEN];
 #define DRIVE_EMM_TX_TIMEOUT_MS ((uint32_t)100U)
 /** @brief 电机反馈轮询周期，单位为毫秒。 */
 #define DRIVE_EMM_FEEDBACK_PERIOD_MS ((uint32_t)20U)
+/** @brief 单条反馈查询等待回包的最长时间，单位为毫秒。 */
+#define DRIVE_EMM_FEEDBACK_REPLY_TIMEOUT_MS ((uint32_t)80U)
 /** @brief 电机反馈超时时间，单位为毫秒。 */
 #define DRIVE_EMM_FEEDBACK_TIMEOUT_MS ((uint32_t)500U)
 /** @brief 启动阶段反馈监督宽限时间，单位为毫秒。 */
@@ -147,6 +149,19 @@ typedef struct
 	/** @brief 反馈数据最近一次更新时间戳。 */
   uint32_t updated_tick;
 } DriveEmm_MotorFeedback_t;
+
+typedef struct
+{
+  uint8_t tx_queue_count;
+  uint8_t tx_queue_depth;
+  uint8_t tx_active;
+  uint8_t query_waiting;
+  uint32_t tx_error_count;
+  uint32_t rx_reply_count;
+  uint32_t rx_invalid_frame_count;
+  uint32_t rx_unknown_motor_count;
+  uint32_t query_timeout_count;
+} DriveEmm_Diagnostics_t;
 
 /* 初始化 USART3 DMA 接收、发送队列和轮询反馈。 */
 /** @brief 初始化 EMM 驱动的 DMA、发送队列和反馈轮询。 */
@@ -203,6 +218,8 @@ uint8_t drive_emm_IsMotorFeedbackHealthy(uint8_t id, uint32_t timeout_ms);
 /** @retval 0 未到达目标位置或反馈无效。 */
 uint8_t drive_emm_IsMotorReached(uint8_t id, int32_t target_pulse,
                                   int32_t tolerance_pulse, uint32_t timeout_ms);
+HAL_StatusTypeDef drive_emm_GetDiagnostics(DriveEmm_Diagnostics_t *diagnostics);
+uint8_t drive_emm_CanQueueFrames(uint8_t frame_count);
 
 /**
 ***********************************************************
