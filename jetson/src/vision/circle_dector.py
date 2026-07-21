@@ -411,4 +411,15 @@ class CircleDetector:
             cv2.drawMarker(output, tuple(map(int, result.center)), (0, 0, 255), cv2.MARKER_CROSS, 40, 2)
         if gt is not None:
             cv2.drawMarker(output, tuple(map(int, gt)), (0, 255, 0), cv2.MARKER_SQUARE, 30, 2)
+        if debug is not None:
+            center_text = "None" if result.center is None else f"({result.center[0]:.2f}, {result.center[1]:.2f})"
+            labels = [
+                f"found={result.found} confidence={result.confidence:.2f}",
+                f"center={center_text}",
+                f"rings={len(debug.get('rings', []))} matched={debug.get('matched_indices', [])}",
+            ]
+            for index, text in enumerate(labels):
+                position = (12, 24 + index * 20)
+                cv2.putText(output, text, position, cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 0, 255), 2, cv2.LINE_AA)
+                cv2.putText(output, text, position, cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1, cv2.LINE_AA)
         return output

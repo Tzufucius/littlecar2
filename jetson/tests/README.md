@@ -14,6 +14,13 @@
 python -m unittest discover -s tests
 ```
 
+导出同心圆检测的原图叠加结果和自适应阈值图：
+
+```powershell
+$env:CIRCLE_DEBUG_OUTPUT_DIR = "outputs/circle_debug"
+python -m unittest discover -s tests -p test_circle_detector.py -v
+```
+
 执行实车通信检查：
 
 ```powershell
