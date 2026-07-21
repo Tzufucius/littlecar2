@@ -67,3 +67,6 @@ class CircleDetectorTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# $env:CIRCLE_DEBUG_OUTPUT_DIR = "outputs/circle_debug"
+# python -m unittest discover -s tests -p test_circle_detector.py -v
