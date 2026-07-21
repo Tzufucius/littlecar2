@@ -6,11 +6,19 @@
 - `test_protocol_client.py`：内存串口仿真测试，覆盖当前 STM32 已实现的 SYSTEM、SAFETY 和全部 CHASSIS 高层方法及其 Payload。
 - `test_protocol_hardware.py`：实车串口联调测试，默认跳过，供上板后验证 ACK 和查询响应。
 - `test_app_actions.py`：动作函数的组合顺序、转向方向和异常停车测试。
+- `test_circle_detector.py`：同心圆图案的亚像素圆心、透视校正和空白图失败处理测试。
 
 运行方式：
 
 ```powershell
 python -m unittest discover -s tests
+```
+
+导出同心圆检测的原图叠加结果和自适应阈值图：
+
+```powershell
+$env:CIRCLE_DEBUG_OUTPUT_DIR = "outputs/circle_debug"
+python -m unittest discover -s tests -p test_circle_detector.py -v
 ```
 
 执行实车通信检查：
