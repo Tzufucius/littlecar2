@@ -13,6 +13,7 @@
 #include <string.h>
 #include "advance_chassis.h"
 #include "drive_emm.h"
+#include "sensor_limit.h"
 
 /* --- 内部私有定义 --- */
 
@@ -42,6 +43,9 @@ typedef struct
   int32_t zero_pulse;                     /* 全局零点对应的绝对脉冲值 */
   int32_t current_pulse;                  /* 相对于零点的偏移脉冲 */
   int32_t target_pulse;                   /* 目标相对脉冲 */
+  SensorLimitId_t positive_limit;
+  SensorLimitId_t negative_limit;
+  AxisMotionState_t motion_state;
 } AdvanceArm_Axis_t;
 
 /** @brief 任务执行状态机 */
@@ -148,6 +152,68 @@ static AdvanceArm_Axis_t *AdvanceArm_FindAxis(uint8_t motor_id)
   return NULL;
 }
 
+static SensorLimitId_t AdvanceArm_GetDirectionLimit(const AdvanceArm_Axis_t *axis,
+                                                     AdvanceArm_MotorDirection_t direction)
+{
+  return (direction == ADVANCE_ARM_MOTOR_DIRECTION_FORWARD)
+             ? axis->positive_limit
+             : axis->negative_limit;
+}
+
+static AxisMotionState_t AdvanceArm_GetMovingState(AdvanceArm_MotorDirection_t direction)
+{
+  return (direction == ADVANCE_ARM_MOTOR_DIRECTION_FORWARD)
+             ? AXIS_STATE_MOVING_POSITIVE
+             : AXIS_STATE_MOVING_NEGATIVE;
+}
+
+static AxisMotionState_t AdvanceArm_GetBlockedState(AdvanceArm_MotorDirection_t direction)
+{
+  return (direction == ADVANCE_ARM_MOTOR_DIRECTION_FORWARD)
+             ? AXIS_STATE_BLOCKED_POSITIVE
+             : AXIS_STATE_BLOCKED_NEGATIVE;
+}
+
+static void AdvanceArm_CancelTaskForLimit(AdvanceArm_Axis_t *axis,
+                                          AdvanceArm_MotorDirection_t direction)
+{
+  drive_emm_Stop_Now(axis->motor_id, false);
+  axis->target_pulse = axis->current_pulse;
+  axis->motion_state = AdvanceArm_GetBlockedState(direction);
+
+  memset(&g_advance_arm.executor, 0, sizeof(g_advance_arm.executor));
+  if (g_advance_arm.state == ADVANCE_ARM_RUN_RUNNING)
+  {
+    AdvanceArm_EnterState(ADVANCE_ARM_RUN_READY);
+  }
+}
+
+static uint8_t AdvanceArm_CheckMovingLimit(AdvanceArm_Axis_t *axis)
+{
+  AdvanceArm_MotorDirection_t direction;
+
+  if (axis->motion_state == AXIS_STATE_MOVING_POSITIVE)
+  {
+    direction = ADVANCE_ARM_MOTOR_DIRECTION_FORWARD;
+  }
+  else if (axis->motion_state == AXIS_STATE_MOVING_NEGATIVE)
+  {
+    direction = ADVANCE_ARM_MOTOR_DIRECTION_REVERSE;
+  }
+  else
+  {
+    return 0U;
+  }
+
+  if (!SensorLimit_IsActive(AdvanceArm_GetDirectionLimit(axis, direction)))
+  {
+    return 0U;
+  }
+
+  AdvanceArm_CancelTaskForLimit(axis, direction);
+  return 1U;
+}
+
 static uint8_t AdvanceArm_UpdateAxis(AdvanceArm_Axis_t *axis)
 {
   DriveEmm_MotorFeedback_t feedback;
@@ -239,6 +305,8 @@ static void AdvanceArm_SetFault(void)
   }
   g_advance_arm.lift.validity = ADVANCE_ARM_POSITION_FAULT;
   g_advance_arm.swing.validity = ADVANCE_ARM_POSITION_FAULT;
+  g_advance_arm.lift.motion_state = AXIS_STATE_FAULT;
+  g_advance_arm.swing.motion_state = AXIS_STATE_FAULT;
   g_advance_arm.zero_pending = 0U;
   AdvanceArm_EnterState(ADVANCE_ARM_RUN_FAULT);
 }
@@ -366,8 +434,14 @@ void AdvanceArm_Init(void)
   memset(&g_advance_arm, 0, sizeof(g_advance_arm));
   g_advance_arm.lift.motor_id = g_arm_config.lift_motor_id;
   g_advance_arm.swing.motor_id = g_arm_config.swing_motor_id;
+  g_advance_arm.lift.positive_limit = SENSOR_LIMIT_LIFT_DOWN;
+  g_advance_arm.lift.negative_limit = SENSOR_LIMIT_LIFT_UP;
+  g_advance_arm.swing.positive_limit = SENSOR_LIMIT_SLIDE_FRONT;
+  g_advance_arm.swing.negative_limit = SENSOR_LIMIT_SLIDE_REAR;
   g_advance_arm.lift.validity = ADVANCE_ARM_POSITION_UNKNOWN;
   g_advance_arm.swing.validity = ADVANCE_ARM_POSITION_UNKNOWN;
+  g_advance_arm.lift.motion_state = AXIS_STATE_IDLE;
+  g_advance_arm.swing.motion_state = AXIS_STATE_IDLE;
 
   if ((AdvanceArm_ConfigIsValid(&g_arm_config) == 0U) ||
       (drive_emm_MonitorMotor(g_arm_config.lift_motor_id) != HAL_OK) ||
@@ -419,6 +493,8 @@ AdvanceArm_Status_t AdvanceArm_ResetZero(void)
   g_advance_arm.swing.current_pulse = 0;
   g_advance_arm.lift.target_pulse = 0;
   g_advance_arm.swing.target_pulse = 0;
+  g_advance_arm.lift.motion_state = AXIS_STATE_IDLE;
+  g_advance_arm.swing.motion_state = AXIS_STATE_IDLE;
 
   memset(&g_advance_arm.executor, 0, sizeof(g_advance_arm.executor));
   g_advance_arm.zero_pending = 1U;
@@ -431,6 +507,8 @@ void AdvanceArm_InvalidateCoordinates(void)
 {
   g_advance_arm.lift.validity = ADVANCE_ARM_POSITION_UNKNOWN;
   g_advance_arm.swing.validity = ADVANCE_ARM_POSITION_UNKNOWN;
+  g_advance_arm.lift.motion_state = AXIS_STATE_IDLE;
+  g_advance_arm.swing.motion_state = AXIS_STATE_IDLE;
   memset(&g_advance_arm.executor, 0, sizeof(g_advance_arm.executor));
   g_advance_arm.zero_pending = 0U;
   AdvanceArm_EnterState(ADVANCE_ARM_RUN_BOOT);
@@ -463,6 +541,8 @@ AdvanceArm_Status_t AdvanceArm_GetStatus(AdvanceArm_RuntimeStatus_t *status)
 
   status->lift_position_validity = g_advance_arm.lift.validity;
   status->swing_position_validity = g_advance_arm.swing.validity;
+  status->lift_motion_state = g_advance_arm.lift.motion_state;
+  status->slide_motion_state = g_advance_arm.swing.motion_state;
   status->run_state = g_advance_arm.state;
   status->task_type = g_advance_arm.executor.task_type;
   status->step = g_advance_arm.executor.step;
@@ -502,6 +582,26 @@ void AdvanceArm_Poll(void)
     return;
   }
 
+  if ((AdvanceArm_CheckMovingLimit(&g_advance_arm.lift) != 0U) ||
+      (AdvanceArm_CheckMovingLimit(&g_advance_arm.swing) != 0U))
+  {
+    return;
+  }
+
+  if ((g_advance_arm.lift.motion_state == AXIS_STATE_MOVING_POSITIVE ||
+       g_advance_arm.lift.motion_state == AXIS_STATE_MOVING_NEGATIVE) &&
+      (AdvanceArm_AxisReached(&g_advance_arm.lift) != 0U))
+  {
+    g_advance_arm.lift.motion_state = AXIS_STATE_IDLE;
+  }
+
+  if ((g_advance_arm.swing.motion_state == AXIS_STATE_MOVING_POSITIVE ||
+       g_advance_arm.swing.motion_state == AXIS_STATE_MOVING_NEGATIVE) &&
+      (AdvanceArm_AxisReached(&g_advance_arm.swing) != 0U))
+  {
+    g_advance_arm.swing.motion_state = AXIS_STATE_IDLE;
+  }
+
   /* 3. 确立零点 (手动归零后的确认) */
   if ((g_advance_arm.state == ADVANCE_ARM_RUN_BOOT) &&
       (g_advance_arm.zero_pending != 0U))
@@ -513,6 +613,8 @@ void AdvanceArm_Poll(void)
     g_advance_arm.swing.current_pulse = 0;
     g_advance_arm.lift.target_pulse = 0;
     g_advance_arm.swing.target_pulse = 0;
+    g_advance_arm.lift.motion_state = AXIS_STATE_IDLE;
+    g_advance_arm.swing.motion_state = AXIS_STATE_IDLE;
     g_advance_arm.lift.validity = ADVANCE_ARM_POSITION_VALID;
     g_advance_arm.swing.validity = ADVANCE_ARM_POSITION_VALID;
     g_advance_arm.zero_pending = 0U;
@@ -627,8 +729,30 @@ AdvanceArm_Status_t AdvanceArm_MoveAxis(uint8_t motor_id,
     return ADVANCE_ARM_STATUS_NOT_READY;
   }
 
+  if ((direction != ADVANCE_ARM_MOTOR_DIRECTION_FORWARD) &&
+      (direction != ADVANCE_ARM_MOTOR_DIRECTION_REVERSE))
+  {
+    return ADVANCE_ARM_STATUS_INVALID_PARAM;
+  }
+
+  if (SensorLimit_IsActive(AdvanceArm_GetDirectionLimit(axis, direction)))
+  {
+    if (axis->motion_state == AdvanceArm_GetMovingState(direction))
+    {
+      AdvanceArm_CancelTaskForLimit(axis, direction);
+    }
+    else if ((axis->motion_state != AXIS_STATE_MOVING_POSITIVE) &&
+             (axis->motion_state != AXIS_STATE_MOVING_NEGATIVE))
+    {
+      axis->motion_state = AdvanceArm_GetBlockedState(direction);
+    }
+    return ADVANCE_ARM_STATUS_LIMIT_BLOCKED;
+  }
+
   drive_emm_Pos_Control(motor_id, (uint8_t)direction, velocity, acceleration,
                         pulse_count, !relative, synchronous);
+
+  axis->motion_state = AdvanceArm_GetMovingState(direction);
 
   /* 更新预期的目标坐标 */
   axis->target_pulse = relative
@@ -645,10 +769,14 @@ AdvanceArm_Status_t AdvanceArm_MoveAxis(uint8_t motor_id,
 /* 立即停止指定机械臂轴。 */
 AdvanceArm_Status_t AdvanceArm_StopAxis(uint8_t motor_id, bool synchronous)
 {
-  if (AdvanceArm_FindAxis(motor_id) == NULL)
+  AdvanceArm_Axis_t *axis = AdvanceArm_FindAxis(motor_id);
+
+  if (axis == NULL)
   {
     return ADVANCE_ARM_STATUS_INVALID_PARAM;
   }
   drive_emm_Stop_Now(motor_id, synchronous);
+  axis->target_pulse = axis->current_pulse;
+  axis->motion_state = AXIS_STATE_IDLE;
   return ADVANCE_ARM_STATUS_OK;
 }

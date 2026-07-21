@@ -52,6 +52,8 @@ virtualFolder:
                 - path: ../Core/Inc/stm32f4xx_hal_conf.h
                 - path: ../Core/Inc/stm32f4xx_it.h
                 - path: ../Core/Src/system_stm32f4xx.c
+                - path: ../Core/Inc/sensor_limit.h
+                - path: ../Core/Src/sensor_limit.c
               folders: []
     - name: Drivers
       files: []
