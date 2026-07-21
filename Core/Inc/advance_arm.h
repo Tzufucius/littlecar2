@@ -47,8 +47,20 @@ extern "C"
     ADVANCE_ARM_STATUS_INVALID_PARAM,
     ADVANCE_ARM_STATUS_NOT_READY,
     ADVANCE_ARM_STATUS_BUSY,
+    ADVANCE_ARM_STATUS_LIMIT_BLOCKED,
     ADVANCE_ARM_STATUS_FAULT
   } AdvanceArm_Status_t;
+
+  /** @brief 单轴运动与限位状态。 */
+  typedef enum
+  {
+    AXIS_STATE_IDLE = 0,
+    AXIS_STATE_MOVING_POSITIVE,
+    AXIS_STATE_MOVING_NEGATIVE,
+    AXIS_STATE_BLOCKED_POSITIVE,
+    AXIS_STATE_BLOCKED_NEGATIVE,
+    AXIS_STATE_FAULT
+  } AxisMotionState_t;
 
   /** @brief 轴当前位置有效性。 */
   typedef enum
@@ -113,6 +125,8 @@ extern "C"
   {
     AdvanceArm_PositionValidity_t lift_position_validity; /*!< 升降轴位置有效性。 */
     AdvanceArm_PositionValidity_t swing_position_validity; /*!< 摆动轴位置有效性。 */
+    AxisMotionState_t lift_motion_state; /*!< 升降轴运动与限位状态。 */
+    AxisMotionState_t slide_motion_state; /*!< 滑台轴运动与限位状态。 */
     AdvanceArm_RunState_t run_state; /*!< 当前运行状态。 */
     AdvanceArm_TaskType_t task_type; /*!< 当前任务类型。 */
     uint8_t step; /*!< 当前任务步骤。 */

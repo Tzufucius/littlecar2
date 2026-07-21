@@ -431,6 +431,11 @@
               <FilePath>../Core/Src/sensor_wit.c</FilePath>
             </File>
             <File>
+              <FileName>sensor_limit.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/sensor_limit.c</FilePath>
+            </File>
+            <File>
               <FileName>comm_host.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/comm_host.c</FilePath>
