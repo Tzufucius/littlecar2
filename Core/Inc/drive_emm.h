@@ -119,6 +119,8 @@ extern __IO uint16_t MMCL_count, MMCL_cmd[MMCL_LEN];
 #define DRIVE_EMM_FEEDBACK_PERIOD_MS ((uint32_t)20U)
 /** @brief 单条反馈查询等待回包的最长时间，单位为毫秒。 */
 #define DRIVE_EMM_FEEDBACK_REPLY_TIMEOUT_MS ((uint32_t)80U)
+/** @brief 是否启用 STM32 侧反馈查询与反馈安全监督；仅用于现场排障。 */
+#define DRIVE_EMM_FEEDBACK_MONITOR_ENABLE (1U)
 /** @brief 电机反馈超时时间，单位为毫秒。 */
 #define DRIVE_EMM_FEEDBACK_TIMEOUT_MS ((uint32_t)500U)
 /** @brief 启动阶段反馈监督宽限时间，单位为毫秒。 */
@@ -158,9 +160,12 @@ typedef struct
   uint8_t query_waiting;
   uint32_t tx_error_count;
   uint32_t rx_reply_count;
+  uint32_t rx_ack_count;
   uint32_t rx_invalid_frame_count;
+  uint32_t rx_resync_drop_count;
   uint32_t rx_unknown_motor_count;
   uint32_t query_timeout_count;
+  uint8_t feedback_monitor_enabled;
 } DriveEmm_Diagnostics_t;
 
 /* 初始化 USART3 DMA 接收、发送队列和轮询反馈。 */

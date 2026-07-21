@@ -45,7 +45,9 @@ static uint8_t g_drive_emm_query_id = 0U;
 static uint8_t g_drive_emm_query_code = 0U;
 static uint32_t g_drive_emm_query_started_tick = 0U;
 static uint32_t g_drive_emm_rx_reply_count = 0U;
+static uint32_t g_drive_emm_rx_ack_count = 0U;
 static uint32_t g_drive_emm_rx_invalid_frame_count = 0U;
+static uint32_t g_drive_emm_rx_resync_drop_count = 0U;
 static uint32_t g_drive_emm_rx_unknown_motor_count = 0U;
 static uint32_t g_drive_emm_query_timeout_count = 0U;
 
@@ -60,10 +62,10 @@ static uint8_t DriveEmm_GetExpectedReplyLength(uint8_t code)
   switch (code)
   {
   case 0x35U:
-    return 5U;
+    return 6U;
   case 0x36U:
   case 0x37U:
-    return 7U;
+    return 8U;
   case 0x3AU:
     return 4U;
   default:
@@ -175,15 +177,15 @@ static void DriveEmm_HandleReply(const uint8_t *frame, uint8_t length)
   }
 
   code = frame[1];
-  if ((code == 0x35U) && (length == 5U))
+  if ((code == 0x35U) && (length == 6U))
   {
     motor->feedback.speed_rpm = DriveEmm_ReadSigned16(&frame[2]);
   }
-  else if ((code == 0x36U) && (length == 7U))
+  else if ((code == 0x36U) && (length == 8U))
   {
     motor->feedback.position = DriveEmm_ReadSigned32(&frame[2]);
   }
-  else if ((code == 0x37U) && (length == 7U))
+  else if ((code == 0x37U) && (length == 8U))
   {
     motor->feedback.position_error = DriveEmm_ReadSigned32(&frame[2]);
   }
@@ -196,6 +198,11 @@ static void DriveEmm_HandleReply(const uint8_t *frame, uint8_t length)
   }
   else
   {
+    if (length == 4U)
+    {
+      ++g_drive_emm_rx_ack_count;
+      return;
+    }
     ++g_drive_emm_rx_invalid_frame_count;
     return;
   }
@@ -214,22 +221,54 @@ static void DriveEmm_HandleReply(const uint8_t *frame, uint8_t length)
 static void DriveEmm_ParseByte(uint8_t byte)
 {
   uint8_t expected_length;
+  DriveEmm_MonitoredMotor_t *motor;
 
   if (g_drive_emm_rx_frame_length >= sizeof(g_drive_emm_rx_frame))
   {
-    g_drive_emm_rx_frame_length = 0U;
+    memmove(g_drive_emm_rx_frame, &g_drive_emm_rx_frame[1],
+            sizeof(g_drive_emm_rx_frame) - 1U);
+    g_drive_emm_rx_frame_length = (uint8_t)(sizeof(g_drive_emm_rx_frame) - 1U);
+    ++g_drive_emm_rx_resync_drop_count;
   }
   g_drive_emm_rx_frame[g_drive_emm_rx_frame_length++] = byte;
-  if (g_drive_emm_rx_frame_length < 2U)
+  while (g_drive_emm_rx_frame_length > 0U)
   {
-    return;
-  }
+    motor = DriveEmm_FindMotor(g_drive_emm_rx_frame[0]);
+    if (motor == NULL)
+    {
+      memmove(g_drive_emm_rx_frame, &g_drive_emm_rx_frame[1],
+              g_drive_emm_rx_frame_length - 1U);
+      --g_drive_emm_rx_frame_length;
+      ++g_drive_emm_rx_resync_drop_count;
+      continue;
+    }
+    if (g_drive_emm_rx_frame_length < 2U)
+    {
+      return;
+    }
 
-  expected_length = DriveEmm_GetExpectedReplyLength(g_drive_emm_rx_frame[1]);
-  if (g_drive_emm_rx_frame_length >= expected_length)
-  {
+    expected_length = DriveEmm_GetExpectedReplyLength(g_drive_emm_rx_frame[1]);
+    if (g_drive_emm_rx_frame_length < expected_length)
+    {
+      return;
+    }
+    if (g_drive_emm_rx_frame[expected_length - 1U] != 0x6BU)
+    {
+      memmove(g_drive_emm_rx_frame, &g_drive_emm_rx_frame[1],
+              g_drive_emm_rx_frame_length - 1U);
+      --g_drive_emm_rx_frame_length;
+      ++g_drive_emm_rx_resync_drop_count;
+      continue;
+    }
+
     DriveEmm_HandleReply(g_drive_emm_rx_frame, expected_length);
-    g_drive_emm_rx_frame_length = 0U;
+    if (g_drive_emm_rx_frame_length > expected_length)
+    {
+      memmove(g_drive_emm_rx_frame, &g_drive_emm_rx_frame[expected_length],
+              g_drive_emm_rx_frame_length - expected_length);
+    }
+    g_drive_emm_rx_frame_length =
+        (uint8_t)(g_drive_emm_rx_frame_length - expected_length);
   }
 }
 
@@ -1115,7 +1154,9 @@ HAL_StatusTypeDef drive_emm_Init(void)
   g_drive_emm_query_code = 0U;
   g_drive_emm_query_started_tick = 0U;
   g_drive_emm_rx_reply_count = 0U;
+  g_drive_emm_rx_ack_count = 0U;
   g_drive_emm_rx_invalid_frame_count = 0U;
+  g_drive_emm_rx_resync_drop_count = 0U;
   g_drive_emm_rx_unknown_motor_count = 0U;
   g_drive_emm_query_timeout_count = 0U;
 
@@ -1252,6 +1293,10 @@ void drive_emm_Poll(void)
   }
   (void)DriveEmm_StartQueuedTransmit();
 
+  if (DRIVE_EMM_FEEDBACK_MONITOR_ENABLE == 0U)
+  {
+    return;
+  }
   if (g_drive_emm_query_waiting != 0U)
   {
     if ((now_tick - g_drive_emm_query_started_tick) <= DRIVE_EMM_FEEDBACK_REPLY_TIMEOUT_MS)
@@ -1294,6 +1339,10 @@ uint8_t drive_emm_IsChassisFeedbackHealthy(void)
   uint8_t index;
   uint32_t now_tick = HAL_GetTick();
 
+  if (DRIVE_EMM_FEEDBACK_MONITOR_ENABLE == 0U)
+  {
+    return 1U;
+  }
   if ((now_tick - g_drive_emm_monitor_started_tick) < DRIVE_EMM_FEEDBACK_STARTUP_GRACE_MS)
   {
     return 1U;
@@ -1376,9 +1425,12 @@ HAL_StatusTypeDef drive_emm_GetDiagnostics(DriveEmm_Diagnostics_t *diagnostics)
   diagnostics->query_waiting = g_drive_emm_query_waiting;
   diagnostics->tx_error_count = g_drive_emm_tx_error_count;
   diagnostics->rx_reply_count = g_drive_emm_rx_reply_count;
+  diagnostics->rx_ack_count = g_drive_emm_rx_ack_count;
   diagnostics->rx_invalid_frame_count = g_drive_emm_rx_invalid_frame_count;
+  diagnostics->rx_resync_drop_count = g_drive_emm_rx_resync_drop_count;
   diagnostics->rx_unknown_motor_count = g_drive_emm_rx_unknown_motor_count;
   diagnostics->query_timeout_count = g_drive_emm_query_timeout_count;
+  diagnostics->feedback_monitor_enabled = DRIVE_EMM_FEEDBACK_MONITOR_ENABLE;
   __enable_irq();
   return HAL_OK;
 }

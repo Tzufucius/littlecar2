@@ -73,11 +73,14 @@ void AdvanceTest_BlockingMain(void)
   printf("[TEST] drive normal control modes start\r\n");
   if (drive_emm_GetDiagnostics(&diagnostics) == HAL_OK)
   {
-    printf("[TEST][DRIVE] diag q=%u/%u active=%u wait=%u txerr=%lu rx=%lu bad=%lu unknown=%lu timeout=%lu\r\n",
+    printf("[TEST][DRIVE] diag q=%u/%u active=%u wait=%u monitor=%u txerr=%lu rx=%lu ack=%lu bad=%lu drop=%lu unknown=%lu timeout=%lu\r\n",
            (unsigned int)diagnostics.tx_queue_count, (unsigned int)diagnostics.tx_queue_depth,
            (unsigned int)diagnostics.tx_active, (unsigned int)diagnostics.query_waiting,
+           (unsigned int)diagnostics.feedback_monitor_enabled,
            (unsigned long)diagnostics.tx_error_count, (unsigned long)diagnostics.rx_reply_count,
+           (unsigned long)diagnostics.rx_ack_count,
            (unsigned long)diagnostics.rx_invalid_frame_count,
+           (unsigned long)diagnostics.rx_resync_drop_count,
            (unsigned long)diagnostics.rx_unknown_motor_count,
            (unsigned long)diagnostics.query_timeout_count);
   }
@@ -87,21 +90,21 @@ void AdvanceTest_BlockingMain(void)
   HAL_Delay(200);
   printf("[TEST][DRIVE] ID1 normal velocity CW\r\n");
   drive_emm_Vel_Control(1, ZDT_DIR_CW, 150, 10, false);
-  // for (poll_count = 0; poll_count < 100; ++poll_count)
-  // {
-  //   drive_emm_Poll();
-  //   HAL_Delay(20);
-  // }
+  for (poll_count = 0; poll_count < 100; ++poll_count)
+  {
+    drive_emm_Poll();
+    HAL_Delay(20);
+  }
   HAL_Delay(1000);
   drive_emm_Stop_Now(1, false);
   HAL_Delay(1000);
   printf("[TEST][DRIVE] ID1 normal velocity CCW\r\n");
   drive_emm_Vel_Control(1, ZDT_DIR_CCW, 150, 10, false);
-  // for (poll_count = 0; poll_count < 100; ++poll_count)
-  // {
-  //   drive_emm_Poll();
-  //   HAL_Delay(20);
-  // }
+  for (poll_count = 0; poll_count < 100; ++poll_count)
+  {
+    drive_emm_Poll();
+    HAL_Delay(20);
+  }
   HAL_Delay(1000);
   drive_emm_Stop_Now(1, false);
   HAL_Delay(1000);
@@ -408,11 +411,14 @@ void AdvanceTest_BlockingMain(void)
   drive_emm_Stop_Now(4, false);
   if (drive_emm_GetDiagnostics(&diagnostics) == HAL_OK)
   {
-    printf("[TEST][DRIVE] diag q=%u/%u active=%u wait=%u txerr=%lu rx=%lu bad=%lu unknown=%lu timeout=%lu\r\n",
+    printf("[TEST][DRIVE] diag q=%u/%u active=%u wait=%u monitor=%u txerr=%lu rx=%lu ack=%lu bad=%lu drop=%lu unknown=%lu timeout=%lu\r\n",
            (unsigned int)diagnostics.tx_queue_count, (unsigned int)diagnostics.tx_queue_depth,
            (unsigned int)diagnostics.tx_active, (unsigned int)diagnostics.query_waiting,
+           (unsigned int)diagnostics.feedback_monitor_enabled,
            (unsigned long)diagnostics.tx_error_count, (unsigned long)diagnostics.rx_reply_count,
+           (unsigned long)diagnostics.rx_ack_count,
            (unsigned long)diagnostics.rx_invalid_frame_count,
+           (unsigned long)diagnostics.rx_resync_drop_count,
            (unsigned long)diagnostics.rx_unknown_motor_count,
            (unsigned long)diagnostics.query_timeout_count);
   }
