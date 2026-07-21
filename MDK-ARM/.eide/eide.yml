@@ -36,9 +36,9 @@ virtualFolder:
                 - path: ../Core/Src/stm32f4xx_it.c
                 - path: ../Core/Src/stm32f4xx_hal_msp.c
                 - path: ../Core/Inc/advance_arm.h
-                - path: ../Core/Inc/advance_test.h
                 - path: ../Core/Inc/advance_chassis.h
                 - path: ../Core/Inc/advance_motion.h
+                - path: ../Core/Inc/advance_test.h
                 - path: ../Core/Inc/advance_world.h
                 - path: ../Core/Inc/car_pose.h
                 - path: ../Core/Inc/comm_common.h
@@ -46,10 +46,14 @@ virtualFolder:
                 - path: ../Core/Inc/comm_protocol.h
                 - path: ../Core/Inc/drive_bus_servo.h
                 - path: ../Core/Inc/drive_emm.h
+                - path: ../Core/Inc/main.h
                 - path: ../Core/Inc/sensor_ops.h
                 - path: ../Core/Inc/sensor_wit.h
                 - path: ../Core/Inc/stm32f4xx_hal_conf.h
                 - path: ../Core/Inc/stm32f4xx_it.h
+                - path: ../Core/Src/system_stm32f4xx.c
+                - path: ../Core/Inc/sensor_limit.h
+                - path: ../Core/Src/sensor_limit.c
               folders: []
     - name: Drivers
       files: []
@@ -77,6 +81,9 @@ virtualFolder:
           files:
             - path: ../Core/Src/system_stm32f4xx.c
           folders: []
+    - name: ::CMSIS
+      files: []
+      folders: []
 dependenceList: []
 outDir: build
 miscInfo:
@@ -108,7 +115,8 @@ targets:
         options:
           version: 4
           afterBuildTasks: []
-          asm-compiler: {}
+          asm-compiler:
+            defines: []
           beforeBuildTasks: []
           c/cpp-compiler:
             CXX_FLAGS: --diag_suppress=1 --diag_suppress=1295
@@ -119,11 +127,14 @@ targets:
             warnings: all-warnings
           global:
             output-debug-info: enable
-            use-microLIB: true
+            use-microLIB: false
           linker:
             $outputTaskExcludes:
               - .bin
             output-format: elf
+            ro-base: ""
+            rw-base: ""
+            xo-base: ""
         scatterFilePath: ""
         storageLayout:
           RAM:
@@ -151,15 +162,15 @@ targets:
             - id: 1
               isChecked: true
               mem:
-                size: "0x00020000"
+                size: "0x1c000"
                 startAddr: "0x20000000"
               noInit: false
               tag: IRAM
             - id: 2
-              isChecked: false
+              isChecked: true
               mem:
-                size: "0x0"
-                startAddr: "0x0"
+                size: "0x4000"
+                startAddr: "0x2001c000"
               noInit: false
               tag: IRAM
           ROM:
@@ -188,11 +199,11 @@ targets:
               isChecked: true
               isStartup: true
               mem:
-                size: "0x00100000"
-                startAddr: "0x08000000"
+                size: "0x100000"
+                startAddr: "0x8000000"
               tag: IROM
             - id: 2
-              isChecked: false
+              isChecked: true
               isStartup: false
               mem:
                 size: "0x0"
@@ -239,7 +250,7 @@ targets:
         interface: cmsis-dap
         target: stm32f4x
       STLink:
-        address: "0x08000000"
+        address: "0x8000000"
         bin: ""
         elFile: None
         optionBytes: .eide/4-29.st.option.bytes.ini
