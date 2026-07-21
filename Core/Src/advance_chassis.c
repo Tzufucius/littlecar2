@@ -147,6 +147,10 @@ void Chassis_Enable(bool enable)
 {
   uint8_t i;
 
+  if (drive_emm_CanQueueFrames(2U) == 0U)
+  {
+    return;
+  }
   for (i = 0U; i < 4U; ++i)
   {
     drive_emm_MMCL_En_Control(g_chassis_motors[i].id, enable, true);
@@ -178,6 +182,11 @@ void Chassis_SmoothStop(uint8_t acc)
 /* 直接设置四个轮子的目标 RPM，并按指定加速度发送同步命令。 */
 void Chassis_SetMotorRPMEx(int16_t lf_rpm, int16_t rf_rpm, int16_t lr_rpm, int16_t rr_rpm, uint8_t acc)
 {
+  if (drive_emm_CanQueueFrames(2U) == 0U)
+  {
+    g_chassis_motion_command_active = 0U;
+    return;
+  }
   /* 先装入四个轮子的速度命令，再一次性发送多电机命令。 */
   Chassis_LoadMotorSpeed(&g_chassis_motors[0], lf_rpm, acc);
   Chassis_LoadMotorSpeed(&g_chassis_motors[1], rf_rpm, acc);

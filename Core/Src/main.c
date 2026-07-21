@@ -45,7 +45,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 /* 发布固件保持 0，避免 printf 的逐字节阻塞影响控制周期。 */
-#define DEBUG_UART_ENABLE (0U)
+#define DEBUG_UART_ENABLE (1U)
 
 /* TIM6 提供 1 ms 调度节拍，所有业务周期统一在这里配置。 */
 #define APP_SCHEDULER_TICK_MS ((uint32_t)1U)
@@ -275,7 +275,10 @@ int main(void)
   CarPose_Init();
   AdvanceWorld_Init();
   AdvanceMotion_Init();
-  (void)drive_emm_Init();
+  if (drive_emm_Init() != HAL_OK)
+  {
+    Error_Handler();
+  }
   drive_emm_ConfigureChassisFeedback(
       CHASSIS_MOTOR_LF_ID,
       CHASSIS_MOTOR_RF_ID,
@@ -304,8 +307,6 @@ int main(void)
   }
 
   // 1. 初始化电机驱动底层 (开启 DMA 接收等)
-  drive_emm_Init();
-
   // 2. 启动后立即闪烁 3 次作为“板子活了”的信号
   for (int i = 0; i < 6; i++)
   {
@@ -315,7 +316,7 @@ int main(void)
   
   // 测试
   /* 取消注释以依次执行阻塞测试和非阻塞测试。 */
-  // AdvanceTest_BlockingMain();
+  AdvanceTest_BlockingMain();
   // AdvanceTest_NonBlockingMain(); 
 
   /* USER CODE END 2 */
