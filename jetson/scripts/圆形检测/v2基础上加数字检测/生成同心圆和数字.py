@@ -186,26 +186,29 @@ def render_encoder_pattern(canvas_size, number):
 
     # 2. 绘制中心扭曲变形的数字 (1, 2, 3)
     # 字体大小同样依据包含 0.8 系数的 scale 自动缩小
-    fontsize = 23 * scale  
-    
-    # 仿射变换矩阵：随机 X/Y 方向剪切(Skew) + 随机小角度旋转(Rotation) + 移动到中心点(cx, cy)
-    shear_x = np.random.uniform(-0.15, 0.15)
-    shear_y = np.random.uniform(-0.15, 0.15)
-    rot_deg = np.random.uniform(-12, 12)
-    
-    t_custom = Affine2D().skew(shear_x, shear_y).rotate_deg(rot_deg).translate(cx, cy)
-    text_transform = t_custom + ax.transData
+    # 2. 绘制中心随机旋转的数字
+    fontsize = 23 * scale
 
-    # 在 (0,5) 位置渲染，通过自定义 transform 自动实现畸变并映射到 (cx, cy) 坐标处
+    # 任意角度旋转
+    rot_deg = np.random.uniform(-60, 60)
+
+    # 可选：数字中心轻微随机偏移
+    digit_offset_x = np.random.uniform(-2.0, 2.0) * scale
+    digit_offset_y = np.random.uniform(-2.0, 2.0) * scale
+
     ax.text(
-        0, 5, str(number),
-        transform=text_transform,
+        cx + digit_offset_x,
+        cy + digit_offset_y,
+        str(number),
         fontsize=fontsize,
         fontweight="bold",
         color=draw_color,
-        ha="center",       # 【修改】：水平居中
-        va="center",       # 【修改】：垂直居中
-        family=["SimHei", "Heiti TC", "STHeiti", "sans-serif"]  # 【修改】：字体指定为黑体，跨平台兼容
+        ha="center",
+        va="center",
+        rotation=rot_deg,
+        rotation_mode="anchor",
+        transform=ax.transData,
+        family=["SimHei", "Heiti TC", "STHeiti", "sans-serif"]
     )
 
     return fig, ax, cx, cy, scale
