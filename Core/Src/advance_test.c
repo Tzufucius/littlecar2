@@ -1,5 +1,7 @@
 #include "advance_test.h"
 
+#include <stdio.h>
+
 #include "advance_chassis.h"
 #include "drive_emm.h"
 #include "main.h"
@@ -62,26 +64,147 @@ static void AdvanceTest_ExecuteAction(const AdvanceTest_Action_t *action)
 
 void AdvanceTest_BlockingMain(void)
 {
+  printf("[TEST] four chassis motor layered test start\r\n");
+
+  printf("[TEST] layer 1: drive_emm direct motor control\r\n");
+  printf("[TEST][DRIVE] ID1 enable\r\n");
+  drive_emm_En_Control(1, true, false);
+  HAL_Delay(200);
+  printf("[TEST][DRIVE] ID1 forward\r\n");
+  drive_emm_Vel_Control(1, ZDT_DIR_CW, 150, 10, false);
+  HAL_Delay(2000);
+  drive_emm_Stop_Now(1, false);
+  HAL_Delay(1000);
+  printf("[TEST][DRIVE] ID1 reverse\r\n");
+  drive_emm_Vel_Control(1, ZDT_DIR_CCW, 150, 10, false);
+  HAL_Delay(2000);
+  drive_emm_Stop_Now(1, false);
+  HAL_Delay(1000);
+  drive_emm_En_Control(1, false, false);
+  printf("[TEST][DRIVE] ID1 complete\r\n");
+
+  printf("[TEST][DRIVE] ID2 enable\r\n");
+  drive_emm_En_Control(2, true, false);
+  HAL_Delay(200);
+  printf("[TEST][DRIVE] ID2 forward\r\n");
+  drive_emm_Vel_Control(2, ZDT_DIR_CW, 150, 10, false);
+  HAL_Delay(2000);
+  drive_emm_Stop_Now(2, false);
+  HAL_Delay(1000);
+  printf("[TEST][DRIVE] ID2 reverse\r\n");
+  drive_emm_Vel_Control(2, ZDT_DIR_CCW, 150, 10, false);
+  HAL_Delay(2000);
+  drive_emm_Stop_Now(2, false);
+  HAL_Delay(1000);
+  drive_emm_En_Control(2, false, false);
+  printf("[TEST][DRIVE] ID2 complete\r\n");
+
+  printf("[TEST][DRIVE] ID3 enable\r\n");
+  drive_emm_En_Control(3, true, false);
+  HAL_Delay(200);
+  printf("[TEST][DRIVE] ID3 forward\r\n");
+  drive_emm_Vel_Control(3, ZDT_DIR_CW, 150, 10, false);
+  HAL_Delay(2000);
+  drive_emm_Stop_Now(3, false);
+  HAL_Delay(1000);
+  printf("[TEST][DRIVE] ID3 reverse\r\n");
+  drive_emm_Vel_Control(3, ZDT_DIR_CCW, 150, 10, false);
+  HAL_Delay(2000);
+  drive_emm_Stop_Now(3, false);
+  HAL_Delay(1000);
+  drive_emm_En_Control(3, false, false);
+  printf("[TEST][DRIVE] ID3 complete\r\n");
+
+  printf("[TEST][DRIVE] ID4 enable\r\n");
+  drive_emm_En_Control(4, true, false);
+  HAL_Delay(200);
+  printf("[TEST][DRIVE] ID4 forward\r\n");
+  drive_emm_Vel_Control(4, ZDT_DIR_CW, 150, 10, false);
+  HAL_Delay(2000);
+  drive_emm_Stop_Now(4, false);
+  HAL_Delay(1000);
+  printf("[TEST][DRIVE] ID4 reverse\r\n");
+  drive_emm_Vel_Control(4, ZDT_DIR_CCW, 150, 10, false);
+  HAL_Delay(2000);
+  drive_emm_Stop_Now(4, false);
+  HAL_Delay(1000);
+  drive_emm_En_Control(4, false, false);
+  printf("[TEST][DRIVE] ID4 complete\r\n");
+
+  printf("[TEST] layer 2: advance_chassis single-wheel mapping\r\n");
   Chassis_Enable(true);
+  printf("[TEST][CHASSIS] ID1 forward\r\n");
+  Chassis_SetMotorRPMEx(150, 0, 0, 0, 10);
+  HAL_Delay(2000);
+  Chassis_SmoothStop(10);
+  HAL_Delay(1000);
+  printf("[TEST][CHASSIS] ID1 reverse\r\n");
+  Chassis_SetMotorRPMEx(-150, 0, 0, 0, 10);
+  HAL_Delay(2000);
+  Chassis_SmoothStop(10);
+  HAL_Delay(1000);
 
-  Chassis_MoveMecanumEx(100, 0, 0, 10U);
-  HAL_Delay(1000U);
-  Chassis_SmoothStop(10U);
-  HAL_Delay(500U);
+  printf("[TEST][CHASSIS] ID2 forward\r\n");
+  Chassis_SetMotorRPMEx(0, 0, 150, 0, 10);
+  HAL_Delay(2000);
+  Chassis_SmoothStop(10);
+  HAL_Delay(1000);
+  printf("[TEST][CHASSIS] ID2 reverse\r\n");
+  Chassis_SetMotorRPMEx(0, 0, -150, 0, 10);
+  HAL_Delay(2000);
+  Chassis_SmoothStop(10);
+  HAL_Delay(1000);
 
-  Chassis_MoveMecanumEx(-100, 0, 0, 10U);
-  HAL_Delay(1000U);
-  Chassis_SmoothStop(10U);
-  HAL_Delay(500U);
+  printf("[TEST][CHASSIS] ID3 forward\r\n");
+  Chassis_SetMotorRPMEx(0, 150, 0, 0, 10);
+  HAL_Delay(2000);
+  Chassis_SmoothStop(10);
+  HAL_Delay(1000);
+  printf("[TEST][CHASSIS] ID3 reverse\r\n");
+  Chassis_SetMotorRPMEx(0, -150, 0, 0, 10);
+  HAL_Delay(2000);
+  Chassis_SmoothStop(10);
+  HAL_Delay(1000);
 
-  Chassis_MoveMecanumEx(0, 0, 100, 10U);
-  HAL_Delay(1000U);
-  Chassis_SmoothStop(10U);
-  HAL_Delay(500U);
+  printf("[TEST][CHASSIS] ID4 forward\r\n");
+  Chassis_SetMotorRPMEx(0, 0, 0, 150, 10);
+  HAL_Delay(2000);
+  Chassis_SmoothStop(10);
+  HAL_Delay(1000);
+  printf("[TEST][CHASSIS] ID4 reverse\r\n");
+  Chassis_SetMotorRPMEx(0, 0, 0, -150, 10);
+  HAL_Delay(2000);
+  Chassis_SmoothStop(10);
+  HAL_Delay(1000);
 
-  Chassis_MoveMecanumEx(0, 0, -100, 10U);
-  HAL_Delay(1000U);
-  Chassis_SmoothStop(10U);
+  printf("[TEST] layer 3: advance_chassis vehicle motion\r\n");
+  printf("[TEST][ADVANCE] mecanum forward\r\n");
+  Chassis_MoveMecanumEx(150, 0, 0, 10);
+  HAL_Delay(2000);
+  Chassis_SmoothStop(10);
+  HAL_Delay(1000);
+
+  printf("[TEST][ADVANCE] mecanum reverse\r\n");
+  Chassis_MoveMecanumEx(-150, 0, 0, 10);
+  HAL_Delay(2000);
+  Chassis_SmoothStop(10);
+  HAL_Delay(1000);
+
+  printf("[TEST][ADVANCE] mecanum rotate CCW\r\n");
+  Chassis_MoveMecanumEx(0, 0, 150, 10);
+  HAL_Delay(2000);
+  Chassis_SmoothStop(10);
+  HAL_Delay(1000);
+
+  printf("[TEST][ADVANCE] body velocity\r\n");
+  Chassis_SetBodyVelocityEx(0.0f, 100.0f, 0.0f, 10);
+  HAL_Delay(2000);
+  Chassis_SmoothStop(10);
+  HAL_Delay(1000);
+
+  Chassis_Stop();
+  Chassis_Enable(false);
+  printf("[TEST] four chassis motor layered test complete\r\n");
 }
 
 void AdvanceTest_NonBlockingMain(void)

@@ -45,7 +45,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 /* 发布固件保持 0，避免 printf 的逐字节阻塞影响控制周期。 */
-#define DEBUG_UART_ENABLE (0U)
+#define DEBUG_UART_ENABLE (1U)
 
 /* TIM6 提供 1 ms 调度节拍，所有业务周期统一在这里配置。 */
 #define APP_SCHEDULER_TICK_MS ((uint32_t)1U)
@@ -315,7 +315,7 @@ int main(void)
   
   // 测试
   /* 取消注释以依次执行阻塞测试和非阻塞测试。 */
-  // AdvanceTest_BlockingMain();
+  AdvanceTest_BlockingMain();
   // AdvanceTest_NonBlockingMain(); 
 
   /* USER CODE END 2 */

@@ -150,6 +150,7 @@ void Chassis_Enable(bool enable)
   for (i = 0U; i < 4U; ++i)
   {
     drive_emm_MMCL_En_Control(g_chassis_motors[i].id, enable, true);
+    drive_emm_En_Control(g_chassis_motors[i].id, enable, 0);
   }
 
   Chassis_SendLoadedCommand();
