@@ -7,21 +7,13 @@
 
 typedef struct
 {
-  AdvanceMotion_RunState_t state;
-  WorldGoalPose2D_t goal;
-  WorldPose2D_t pose;
-  float error_x_mm;
-  float error_y_mm;
-  float position_error_mm;
-  float yaw_error_deg;
-  uint32_t started_tick;
-  uint32_t updated_tick;
   uint32_t arrive_hold_start_tick;
   uint8_t arrival_stop_sent;
   uint8_t acc;
-} AdvanceMotion_Context_t;
+} AdvanceMotion_Control_t;
 
-static AdvanceMotion_Context_t g_motion = {0};
+static AdvanceMotion_RuntimeStatus_t g_motion = {0};
+static AdvanceMotion_Control_t g_motion_control = {0};
 
 /* 返回浮点数的绝对值。 */
 static float AdvanceMotion_AbsFloat(float value)
@@ -127,10 +119,12 @@ static void AdvanceMotion_SetTerminalState(AdvanceMotion_RunState_t state, uint8
 {
   g_motion.state = state;
   g_motion.updated_tick = HAL_GetTick();
-  if ((state != ADVANCE_MOTION_STATE_ARRIVED) || (g_motion.arrival_stop_sent == 0U))
+  if ((state != ADVANCE_MOTION_STATE_ARRIVED) || (g_motion_control.arrival_stop_sent == 0U))
   {
     Chassis_SmoothStop(stop_acc);
   }
+  g_motion_control.arrive_hold_start_tick = 0U;
+  g_motion_control.arrival_stop_sent = 0U;
 }
 
 static AdvanceMotion_Status_t AdvanceMotion_ApplyWorldVelocityEx(float vx_world_mm_s, float vy_world_mm_s, float wz_ccw_deg_s, uint8_t acc)
@@ -172,7 +166,8 @@ static AdvanceMotion_Status_t AdvanceMotion_ApplyWorldVelocityEx(float vx_world_
 /* 初始化世界坐标运动控制器。 */
 void AdvanceMotion_Init(void)
 {
-  g_motion = (AdvanceMotion_Context_t){0};
+  g_motion = (AdvanceMotion_RuntimeStatus_t){0};
+  g_motion_control = (AdvanceMotion_Control_t){0};
   g_motion.state = ADVANCE_MOTION_STATE_IDLE;
 }
 
@@ -183,6 +178,8 @@ AdvanceMotion_Status_t AdvanceMotion_SetWorldVelocityEx(float vx_world_mm_s, flo
   {
     g_motion.state = ADVANCE_MOTION_STATE_CANCELED;
     g_motion.updated_tick = HAL_GetTick();
+    g_motion_control.arrive_hold_start_tick = 0U;
+    g_motion_control.arrival_stop_sent = 0U;
   }
 
   return AdvanceMotion_ApplyWorldVelocityEx(vx_world_mm_s, vy_world_mm_s, wz_ccw_deg_s, acc);
@@ -199,13 +196,13 @@ AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, u
   g_motion.goal = *goal;
   g_motion.started_tick = HAL_GetTick();
   g_motion.updated_tick = g_motion.started_tick;
-  g_motion.arrive_hold_start_tick = 0U;
-  g_motion.arrival_stop_sent = 0U;
+  g_motion_control.arrive_hold_start_tick = 0U;
+  g_motion_control.arrival_stop_sent = 0U;
   g_motion.error_x_mm = 0.0f;
   g_motion.error_y_mm = 0.0f;
   g_motion.position_error_mm = 0.0f;
   g_motion.yaw_error_deg = 0.0f;
-  g_motion.acc = acc;
+  g_motion_control.acc = acc;
   g_motion.state = ADVANCE_MOTION_STATE_RUNNING;
   return ADVANCE_MOTION_STATUS_OK;
 }
@@ -230,19 +227,19 @@ void AdvanceMotion_Poll(void)
   if ((g_motion.goal.timeout_ms > 0U) &&
       ((now_tick - g_motion.started_tick) >= g_motion.goal.timeout_ms))
   {
-    AdvanceMotion_SetTerminalState(ADVANCE_MOTION_STATE_TIMEOUT, g_motion.acc);
+    AdvanceMotion_SetTerminalState(ADVANCE_MOTION_STATE_TIMEOUT, g_motion_control.acc);
     return;
   }
 
   pose_status = AdvanceMotion_GetFreshPose(&g_motion.pose);
   if (pose_status == ADVANCE_MOTION_STATUS_NO_ORIGIN)
   {
-    AdvanceMotion_SetTerminalState(ADVANCE_MOTION_STATE_NO_ORIGIN, g_motion.acc);
+    AdvanceMotion_SetTerminalState(ADVANCE_MOTION_STATE_NO_ORIGIN, g_motion_control.acc);
     return;
   }
   if (pose_status != ADVANCE_MOTION_STATUS_OK)
   {
-    AdvanceMotion_SetTerminalState(ADVANCE_MOTION_STATE_NO_POSE, g_motion.acc);
+    AdvanceMotion_SetTerminalState(ADVANCE_MOTION_STATE_NO_POSE, g_motion_control.acc);
     return;
   }
 
@@ -254,7 +251,7 @@ void AdvanceMotion_Poll(void)
   if ((yaw_required != 0U) &&
       ((now_tick - g_motion.pose.yaw_updated_tick) > ADVANCE_MOTION_YAW_TIMEOUT_MS))
   {
-    AdvanceMotion_SetTerminalState(ADVANCE_MOTION_STATE_NO_POSE, g_motion.acc);
+    AdvanceMotion_SetTerminalState(ADVANCE_MOTION_STATE_NO_POSE, g_motion_control.acc);
     return;
   }
   g_motion.yaw_error_deg = yaw_required ? AdvanceWorld_WrapAngleDeg(g_motion.goal.yaw_deg - g_motion.pose.yaw_deg) : 0.0f;
@@ -262,24 +259,24 @@ void AdvanceMotion_Poll(void)
   if ((g_motion.position_error_mm <= ADVANCE_MOTION_POS_TOLERANCE_MM) &&
       ((yaw_required == 0U) || (AdvanceMotion_AbsFloat(g_motion.yaw_error_deg) <= ADVANCE_MOTION_YAW_TOLERANCE_DEG)))
   {
-    if (g_motion.arrive_hold_start_tick == 0U)
+    if (g_motion_control.arrive_hold_start_tick == 0U)
     {
-      g_motion.arrive_hold_start_tick = now_tick;
+      g_motion_control.arrive_hold_start_tick = now_tick;
     }
-    if (g_motion.arrival_stop_sent == 0U)
+    if (g_motion_control.arrival_stop_sent == 0U)
     {
       /* 保持判定期间已不再输出上一周期的非零速度。 */
-      Chassis_SmoothStop(g_motion.acc);
-      g_motion.arrival_stop_sent = 1U;
+      Chassis_SmoothStop(g_motion_control.acc);
+      g_motion_control.arrival_stop_sent = 1U;
     }
-    if ((now_tick - g_motion.arrive_hold_start_tick) >= ADVANCE_MOTION_ARRIVE_HOLD_MS)
+    if ((now_tick - g_motion_control.arrive_hold_start_tick) >= ADVANCE_MOTION_ARRIVE_HOLD_MS)
     {
-      AdvanceMotion_SetTerminalState(ADVANCE_MOTION_STATE_ARRIVED, g_motion.acc);
+      AdvanceMotion_SetTerminalState(ADVANCE_MOTION_STATE_ARRIVED, g_motion_control.acc);
     }
     return;
   }
-  g_motion.arrive_hold_start_tick = 0U;
-  g_motion.arrival_stop_sent = 0U;
+  g_motion_control.arrive_hold_start_tick = 0U;
+  g_motion_control.arrival_stop_sent = 0U;
 
   vx_world_mm_s = ADVANCE_MOTION_KP_POS * g_motion.error_x_mm;
   vy_world_mm_s = ADVANCE_MOTION_KP_POS * g_motion.error_y_mm;
@@ -295,7 +292,7 @@ void AdvanceMotion_Poll(void)
         wmax_deg_s);
   }
 
-  (void)AdvanceMotion_ApplyWorldVelocityEx(vx_world_mm_s, vy_world_mm_s, wz_ccw_deg_s, g_motion.acc);
+  (void)AdvanceMotion_ApplyWorldVelocityEx(vx_world_mm_s, vy_world_mm_s, wz_ccw_deg_s, g_motion_control.acc);
   g_motion.updated_tick = now_tick;
 }
 
@@ -321,8 +318,8 @@ void AdvanceMotion_CancelWithoutStop(void)
   {
     g_motion.state = ADVANCE_MOTION_STATE_CANCELED;
     g_motion.updated_tick = HAL_GetTick();
-    g_motion.arrive_hold_start_tick = 0U;
-    g_motion.arrival_stop_sent = 0U;
+    g_motion_control.arrive_hold_start_tick = 0U;
+    g_motion_control.arrival_stop_sent = 0U;
   }
 }
 
@@ -334,14 +331,6 @@ AdvanceMotion_Status_t AdvanceMotion_GetStatus(AdvanceMotion_RuntimeStatus_t *st
     return ADVANCE_MOTION_STATUS_INVALID_PARAM;
   }
 
-  status->state = g_motion.state;
-  status->goal = g_motion.goal;
-  status->pose = g_motion.pose;
-  status->error_x_mm = g_motion.error_x_mm;
-  status->error_y_mm = g_motion.error_y_mm;
-  status->position_error_mm = g_motion.position_error_mm;
-  status->yaw_error_deg = g_motion.yaw_error_deg;
-  status->started_tick = g_motion.started_tick;
-  status->updated_tick = g_motion.updated_tick;
+  *status = g_motion;
   return ADVANCE_MOTION_STATUS_OK;
 }

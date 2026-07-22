@@ -140,7 +140,10 @@ static uint32_t App_TakePendingTasks(void)
 
 static void App_TryResetWorldOrigin(void)
 {
-  if (AdvanceWorld_GetPose()->origin_ready == 0U)
+  WorldPose2D_t pose = {0};
+
+  (void)AdvanceWorld_GetPoseCopy(&pose);
+  if (pose.origin_ready == 0U)
   {
     (void)AdvanceWorld_ResetOrigin();
   }

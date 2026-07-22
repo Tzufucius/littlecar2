@@ -62,22 +62,12 @@ extern "C"
     uint8_t goal_flags; /*!< 目标约束标志位。 */
   } WorldGoalPose2D_t;
 
-  /** @brief 二维线速度和角速度。 */
-  typedef struct
-  {
-    float vx_mm_s; /*!< X 方向速度，单位为 mm/s。 */
-    float vy_mm_s; /*!< Y 方向速度，单位为 mm/s。 */
-    float wz_deg_s; /*!< 绕 Z 轴角速度，单位为度/s。 */
-  } WorldVelocity2D_t;
-
   /** @brief 初始化世界坐标模块。 */
   void AdvanceWorld_Init(void);
   /** @brief 将当前位姿设置为世界坐标原点。 @return 重置结果状态。 */
   AdvanceWorld_Status_t AdvanceWorld_ResetOrigin(void);
   /** @brief 轮询更新世界坐标和传感器状态。 */
   void AdvanceWorld_Poll(void);
-  /** @brief 获取当前世界位姿只读引用。 @return 世界位姿指针。 */
-  const volatile WorldPose2D_t *AdvanceWorld_GetPose(void);
   /** @brief 获取当前世界位姿副本。 @param pose 输出位姿结构体。 @return 获取结果状态。 */
   AdvanceWorld_Status_t AdvanceWorld_GetPoseCopy(WorldPose2D_t *pose);
 

@@ -53,7 +53,7 @@ extern "C"
     ADVANCE_MOTION_STATE_CANCELED
   } AdvanceMotion_RunState_t;
 
-  /** @brief 运动控制模块运行状态及误差。 */
+  /** @brief 运动控制的对外状态快照，用于上位机与调试查询。 */
   typedef struct
   {
     AdvanceMotion_RunState_t state; /*!< 当前运行状态。 */

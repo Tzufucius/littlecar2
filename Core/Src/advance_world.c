@@ -202,12 +202,6 @@ void AdvanceWorld_Poll(void)
   AdvanceWorld_UpdatePoseFromOps();
 }
 
-/* 返回世界位姿的只读指针。 */
-const volatile WorldPose2D_t *AdvanceWorld_GetPose(void)
-{
-  return &g_world_pose;
-}
-
 /* 将当前世界位姿复制到调用方缓冲区。 */
 AdvanceWorld_Status_t AdvanceWorld_GetPoseCopy(WorldPose2D_t *pose)
 {
