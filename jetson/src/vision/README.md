@@ -1,15 +1,14 @@
 # vision 目录说明
 
-本目录存放视觉识别相关代码。
+本目录提供不保存业务流程状态的视觉算法函数。所有检测函数都接收 BGR 格式的 `numpy.ndarray` 图像帧，不负责摄像头、图片读取、视频流或通信。
 
-- `camera.py`：OpenCV 摄像头封装
-- `circle_dector.py`：同心圆图案检测，使用椭圆拟合、同轴环筛选和单应性透视校正输出亚像素圆心
-- `qr_detector.py`：二维码识别和内容变化过滤
-- `yolo_detector.py`：Ultralytics YOLO 推理封装
-- `vision_service.py`：组合二维码和 YOLO 的视觉服务
-- `types.py`：视觉结果数据结构
+## 函数接口
 
-`CircleDetector` 支持图像路径、摄像头和内存帧输入。默认按六圈名义半径
-`[28.0, 30.5, 35.5, 40.2, 44.9, 49.6]` 匹配图案；可通过构造参数或
-`update_config()` 覆盖检测区域、名义半径和拟合阈值。推理过程不统计耗时，结果的
-`time_ms` 固定为 `None`。
+- `marker.py`：`detect_numbered_marker(frame_bgr)`，识别带数字的同心圆标记，返回中心、数字、数字角度、置信度、圈数和缩放因子。
+- `materials.py`：`detect_colored_materials(frame_bgr)`，使用 Hough 圆检测和 HSV 分类识别彩色物料，最多返回三个结果。
+- `qr.py`：`detect_qr(frame_bgr)`，识别二维码并返回内容、角点、中心和时间戳，不进行变化过滤。
+- `yolo.py`：`load_yolo_model(model_path)` 和 `detect_yolo(...)`，保留 YOLO 能力但不自动加载或调用模型。
+
+数字模板在模块内部只初始化一次；除第三方检测器实例外不维护长期状态。传统方法是当前默认视觉方案，YOLO 需要由调用方显式加载。
+
+物料盘旋转中心定位当前不属于正式视觉 API。研究和验证代码仍位于 `scripts/`，本目录不得反向导入这些脚本。

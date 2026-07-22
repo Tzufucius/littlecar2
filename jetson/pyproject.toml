@@ -17,7 +17,11 @@ dependencies = [
 ]
 
 [project.scripts]
-littlecar2 = "app.main:main"
+littlecar2 = "main:main"
+
+[tool.setuptools]
+py-modules = ["main"]
+package-dir = {"" = ".", "protocol" = "src/protocol", "vision" = "src/vision"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
