@@ -50,6 +50,12 @@ extern "C"
     uint8_t origin_ready; /*!< 原点是否已建立：1-是，0-否。 */
   } WorldPose2D_t;
 
+#ifdef ADVANCE_WORLD_INTERNAL
+  extern volatile WorldPose2D_t g_world_pose;
+#else
+  extern const volatile WorldPose2D_t g_world_pose;
+#endif
+
   /** @brief 世界坐标系下的目标位姿及运动约束。 */
   typedef struct
   {
@@ -66,6 +72,7 @@ extern "C"
   void AdvanceWorld_Init(void);
   /** @brief 将当前位姿设置为世界坐标原点。 @return 重置结果状态。 */
   AdvanceWorld_Status_t AdvanceWorld_ResetOrigin(void);
+  AdvanceWorld_Status_t AdvanceWorld_PoseOffset(float x_mm, float y_mm, float yaw_deg);
   /** @brief 轮询更新世界坐标和传感器状态。 */
   void AdvanceWorld_Poll(void);
   /** @brief 获取当前世界位姿副本。 @param pose 输出位姿结构体。 @return 获取结果状态。 */
