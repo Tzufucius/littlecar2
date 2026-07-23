@@ -52,7 +52,7 @@ except ImportError:
 
 
 # ==================== 配置区域 ====================
-MODEL_PATH = PROJECT_ROOT / "assets" / "models" / "6color-circle.pt"
+MODEL_PATH = PROJECT_ROOT / "assets" / "models" / "6color-circle-v2.pt"
 DATASET_DIR = PROJECT_ROOT / "assets" / "彩色物料数据集"
 DEVICE = "cuda:0" if cv2.ocl.haveOpenCL() else "cpu"
 CONF_THRES = 0.5
