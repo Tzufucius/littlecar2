@@ -2,6 +2,7 @@
 
 #include "advance_chassis.h"
 #include "advance_world.h"
+#include "drive_emm.h"
 #include "main.h"
 #include <math.h>
 
@@ -301,6 +302,36 @@ AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, u
   g_motion_control.acc = acc;
   g_motion.state = ADVANCE_MOTION_STATE_RUNNING;
   return ADVANCE_MOTION_STATUS_OK;
+}
+
+/* 阻塞复用既有轮询控制器，避免维护第二套 PID 逻辑。 */
+AdvanceMotion_RunState_t AdvanceMotion_GotoPoseBlocking(const WorldGoalPose2D_t *goal, uint8_t acc)
+{
+  uint32_t last_control_tick;
+  AdvanceMotion_Status_t status;
+
+  status = AdvanceMotion_GotoPoseEx(goal, acc);
+  if (status != ADVANCE_MOTION_STATUS_OK)
+  {
+    return g_motion.state;
+  }
+
+  last_control_tick = HAL_GetTick();
+  while (g_motion.state == ADVANCE_MOTION_STATE_RUNNING)
+  {
+    uint32_t now_tick = HAL_GetTick();
+
+    drive_emm_Poll();
+    if ((now_tick - last_control_tick) >= 20U)
+    {
+      last_control_tick = now_tick;
+      AdvanceMotion_Poll();
+    }
+
+    __WFI();
+  }
+
+  return g_motion.state;
 }
 
 /* 周期性读取世界位姿，计算误差并驱动到点控制状态机。 */

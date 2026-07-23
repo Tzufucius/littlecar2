@@ -10,6 +10,7 @@ extern "C"
 
 #define ADVANCE_WORLD_DEBUG_PRINT_MS ((uint32_t)500U) /*!< 世界坐标调试打印周期，单位为 ms。 */
 #define ADVANCE_WORLD_DEBUG_ENABLE (0U) /*!< 世界坐标调试打印开关：0-关闭，1-开启。 */
+#define ADVANCE_WORLD_SENSOR_TIMEOUT_MS ((uint32_t)500U) /*!< 传感器数据新鲜度超时，单位为 ms。 */
 
 /*
  * world yaw 统一约定：俯视小车时，逆时针旋转为角度增大。
