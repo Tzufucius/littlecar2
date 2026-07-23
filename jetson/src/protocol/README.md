@@ -61,8 +61,9 @@ car.system.ping()
 - `car.chassis.reset_world_origin()`：以当前有效传感器数据建立 world 原点。
 - `car.chassis.get_motion_status()`：查询异步目标状态，返回 `MotionStatus`。
 - `car.arm.grab()` / `release()`：控制固定标定的夹爪开合。
-- `car.arm.pick()` / `place()`：启动固定取放动作。
-- `car.arm.abort()` / `reset_zero()` / `get_status()`：停止、人工归零和查询机械臂状态。
+- `car.arm.pick()` / `place()`：同步执行固定取放动作；调用方应使用大于 4.5 秒的 ACK 超时。
+- `car.arm.abort()`：停止两步进轴。阻塞动作执行期间，STM32 主循环不会立即处理该命令。
+- `car.arm.reset_zero()` / `get_status()`：当前 STM32 固件不支持，调用会收到 `ACK_UNKNOWN_CMD`。
 - `car.heartbeat.start()` / `stop()`：启动或停止默认 100 ms 的后台心跳服务。
 - `car.read_status(timeout=0.0)`：读取一帧周期 `MSG_STATUS`，无数据时返回 `None`。
 
@@ -74,4 +75,4 @@ car.system.ping()
 
 ## 当前限制
 
-当前 STM32 侧已实现 `SYSTEM`、`SAFETY`、`CHASSIS` 和固定配置的 `SERVO` 命令，其中状态查询会在 ACK 后返回 `MSG_DATA`。`SYS_SET_MODE` 为废弃兼容命令，Jetson 不再公开该接口。`SENSOR_GET_IMU`、`SENSOR_GET_OPS` 和周期 `MSG_STATUS` 尚未由 STM32 `comm_protocol.c` 分发；相关解析函数只作为后续协议扩展的内部预留，不能用于正式联动流程。
+当前 STM32 侧已实现 `SYSTEM`、`SAFETY`、`CHASSIS` 和固定参数的 `SERVO` 命令。`ARM_GRAB` 固定等待 500 ms，`ARM_PICK` 与 `ARM_PLACE` 均为约 4.5 秒的阻塞调用，ACK 仅在动作结束后发送；`ARM_CONFIG`、`ARM_GET_STATUS` 和 `ARM_RESET_ZERO` 已不再提供功能。`SYS_SET_MODE` 为废弃兼容命令，Jetson 不再公开该接口。`SENSOR_GET_IMU`、`SENSOR_GET_OPS` 和周期 `MSG_STATUS` 尚未由 STM32 `comm_protocol.c` 分发；相关解析函数只作为后续协议扩展的内部预留，不能用于正式联动流程。
