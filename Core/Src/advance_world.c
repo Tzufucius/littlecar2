@@ -1,3 +1,4 @@
+#define ADVANCE_WORLD_INTERNAL
 #include "advance_world.h"
 
 #include "car_pose.h"
@@ -17,8 +18,16 @@ typedef struct
   uint8_t imu_yaw_ready;
 } AdvanceWorld_Origin_t;
 
-static volatile WorldPose2D_t g_world_pose = {0};
+typedef struct
+{
+  float x_mm;
+  float y_mm;
+  float yaw_deg;
+} AdvanceWorld_PoseOffset_t;
+
+volatile WorldPose2D_t g_world_pose = {0};
 static AdvanceWorld_Origin_t g_world_origin = {0};
+static AdvanceWorld_PoseOffset_t g_world_pose_offset = {0};
 static uint32_t g_last_debug_print_tick = 0U;
 
 /* 将角度从度转换为弧度。 */
@@ -112,7 +121,7 @@ static void AdvanceWorld_GetOpsChassisPosition(float *x_mm, float *y_mm)
 }
 
 /* 根据 OPS 和 IMU 反馈更新世界坐标位姿。 */
-static void AdvanceWorld_UpdatePoseFromOps(void)
+static AdvanceWorld_Status_t AdvanceWorld_CalculateSensorPose(WorldPose2D_t *pose)
 {
   float dx_raw;
   float dy_raw;
@@ -122,19 +131,25 @@ static void AdvanceWorld_UpdatePoseFromOps(void)
   float cos_yaw;
   float sin_yaw;
 
-  if ((AdvanceWorld_HasValidOps() == 0U) || (g_world_origin.ready == 0U))
+  if (pose == NULL)
   {
-    g_world_pose.valid = 0U;
-    g_world_pose.origin_ready = g_world_origin.ready;
-    return;
+    return ADVANCE_WORLD_STATUS_NOT_READY;
+  }
+
+  if (g_world_origin.ready == 0U)
+  {
+    return ADVANCE_WORLD_STATUS_NO_ORIGIN;
+  }
+
+  if (AdvanceWorld_HasValidOps() == 0U)
+  {
+    return ADVANCE_WORLD_STATUS_NO_OPS;
   }
 
   /* 原点选择了 WIT 航向时，不允许在 WIT 超时后悄然切换到 OPS 航向。 */
   if ((g_world_origin.imu_yaw_ready != 0U) && (AdvanceWorld_HasValidImuYaw() == 0U))
   {
-    g_world_pose.valid = 0U;
-    g_world_pose.origin_ready = 1U;
-    return;
+    return ADVANCE_WORLD_STATUS_NO_OPS;
   }
 
   AdvanceWorld_GetOpsChassisPosition(&ops_x_mm, &ops_y_mm);
@@ -144,19 +159,49 @@ static void AdvanceWorld_UpdatePoseFromOps(void)
   cos_yaw = cosf(yaw_rad);
   sin_yaw = sinf(yaw_rad);
 
-  g_world_pose.x_mm = cos_yaw * dx_raw + sin_yaw * dy_raw;
-  g_world_pose.y_mm = -sin_yaw * dx_raw + cos_yaw * dy_raw;
-  g_world_pose.yaw_deg = AdvanceWorld_GetRelativeYawDeg();
-  g_world_pose.updated_tick = carpose_ops->updated_tick;
-  g_world_pose.yaw_updated_tick = (g_world_origin.imu_yaw_ready != 0U) ? carpose_imu->angle_deg.updated_tick : carpose_ops->updated_tick;
-  g_world_pose.valid = 1U;
-  g_world_pose.origin_ready = 1U;
+  pose->x_mm = cos_yaw * dx_raw + sin_yaw * dy_raw;
+  pose->y_mm = -sin_yaw * dx_raw + cos_yaw * dy_raw;
+  pose->yaw_deg = AdvanceWorld_GetRelativeYawDeg();
+  pose->updated_tick = carpose_ops->updated_tick;
+  pose->yaw_updated_tick = (g_world_origin.imu_yaw_ready != 0U) ? carpose_imu->angle_deg.updated_tick : carpose_ops->updated_tick;
+  pose->valid = 1U;
+  pose->origin_ready = 1U;
+  return ADVANCE_WORLD_STATUS_OK;
+}
+
+static void AdvanceWorld_ApplyPoseOffset(WorldPose2D_t *pose)
+{
+  if ((pose == NULL) || (pose->valid == 0U))
+  {
+    return;
+  }
+
+  pose->x_mm += g_world_pose_offset.x_mm;
+  pose->y_mm += g_world_pose_offset.y_mm;
+  pose->yaw_deg = AdvanceWorld_WrapAngleDeg(pose->yaw_deg + g_world_pose_offset.yaw_deg);
+}
+
+static void AdvanceWorld_UpdatePoseFromOps(void)
+{
+  WorldPose2D_t sensor_pose = {0};
+  AdvanceWorld_Status_t status = AdvanceWorld_CalculateSensorPose(&sensor_pose);
+
+  if (status != ADVANCE_WORLD_STATUS_OK)
+  {
+    g_world_pose.valid = 0U;
+    g_world_pose.origin_ready = g_world_origin.ready;
+    return;
+  }
+
+  AdvanceWorld_ApplyPoseOffset(&sensor_pose);
+  g_world_pose = sensor_pose;
 }
 
 /* 初始化世界坐标、原点和调试输出状态。 */
 void AdvanceWorld_Init(void)
 {
   g_world_origin = (AdvanceWorld_Origin_t){0};
+  g_world_pose_offset = (AdvanceWorld_PoseOffset_t){0};
   g_world_pose = (WorldPose2D_t){0};
   g_last_debug_print_tick = 0U;
 }
@@ -186,13 +231,36 @@ AdvanceWorld_Status_t AdvanceWorld_ResetOrigin(void)
   }
   g_world_origin.ready = 1U;
 
-  g_world_pose.x_mm = 0.0f;
-  g_world_pose.y_mm = 0.0f;
-  g_world_pose.yaw_deg = 0.0f;
-  g_world_pose.updated_tick = HAL_GetTick();
-  g_world_pose.yaw_updated_tick = g_world_pose.updated_tick;
-  g_world_pose.valid = 1U;
-  g_world_pose.origin_ready = 1U;
+  g_world_pose_offset = (AdvanceWorld_PoseOffset_t){0};
+  return AdvanceWorld_PoseOffset(0.0f, 0.0f, 0.0f);
+}
+
+AdvanceWorld_Status_t AdvanceWorld_PoseOffset(float x_mm, float y_mm, float yaw_deg)
+{
+  WorldPose2D_t sensor_pose = {0};
+  AdvanceWorld_Status_t status;
+  uint32_t now_tick;
+
+  if ((isfinite(x_mm) == 0) || (isfinite(y_mm) == 0) || (isfinite(yaw_deg) == 0))
+  {
+    return ADVANCE_WORLD_STATUS_NOT_READY;
+  }
+
+  status = AdvanceWorld_CalculateSensorPose(&sensor_pose);
+  if (status != ADVANCE_WORLD_STATUS_OK)
+  {
+    return status;
+  }
+
+  g_world_pose_offset.x_mm = x_mm - sensor_pose.x_mm;
+  g_world_pose_offset.y_mm = y_mm - sensor_pose.y_mm;
+  g_world_pose_offset.yaw_deg = AdvanceWorld_WrapAngleDeg(yaw_deg - sensor_pose.yaw_deg);
+
+  AdvanceWorld_ApplyPoseOffset(&sensor_pose);
+  now_tick = HAL_GetTick();
+  sensor_pose.updated_tick = now_tick;
+  sensor_pose.yaw_updated_tick = now_tick;
+  g_world_pose = sensor_pose;
   return ADVANCE_WORLD_STATUS_OK;
 }
 
@@ -200,12 +268,6 @@ AdvanceWorld_Status_t AdvanceWorld_ResetOrigin(void)
 void AdvanceWorld_Poll(void)
 {
   AdvanceWorld_UpdatePoseFromOps();
-}
-
-/* 返回世界位姿的只读指针。 */
-const volatile WorldPose2D_t *AdvanceWorld_GetPose(void)
-{
-  return &g_world_pose;
 }
 
 /* 将当前世界位姿复制到调用方缓冲区。 */

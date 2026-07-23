@@ -15,13 +15,12 @@
 - `comm_protocol.h`：上位机二进制协议解析、来源回包与控制权租约接口。
 - `advance_chassis.h`：麦克纳姆底盘高级运动接口。
 - `advance_world.h`：全局坐标系、world 位姿和坐标变换接口。
-- `advance_arm.h`：机械臂闭环控制器接口，含人工置零后的坐标有效性、非阻塞抓取/放置任务、轴限位运动状态和故障状态。
-- `advance_test.h`：下位机人工联调接口，提供阻塞式和非阻塞式底盘组合测试。
+- `advance_arm.h`：机械臂阻塞式高层接口，提供夹爪、固定抓取/放置和停止控制。
+- `advance_test.h`：下位机人工联调接口，仅提供阻塞式测试。
 
 `CMDSET_SERVO (0x04)` 的机械臂扩展命令：
 
-- `0x11 ARM_CONFIG`：废弃兼容命令，仅接受与固定机械臂配置一致的参数并触发人工置零流程。
-- `0x12 ARM_PICK`、`0x13 ARM_PLACE`：零 Payload 启动固定非阻塞取放动作；仍兼容历史 36 字节任务参数格式。
-- `0x16 ARM_RESET_ZERO`：操作者人工归零后建立两轴软件坐标。
-- `0x14 ARM_ABORT`：停止两步进轴并使坐标失效。
-- `0x15 ARM_GET_STATUS`：返回当前协议定义的任务状态、坐标有效性、当前/目标脉冲及故障标志；轴限位状态目前仅通过 `AdvanceArm_RuntimeStatus_t` 在固件内部提供，未扩展该协议 Payload。
+- `0x10 ARM_GRAB`：1 字节 Payload，`0` 打开夹爪，`1` 闭合夹爪。
+- `0x12 ARM_PICK`、`0x13 ARM_PLACE`：零 Payload，同步执行固定取放流程。
+- `0x14 ARM_ABORT`：停止两步进轴。
+- `0x11 ARM_CONFIG`、`0x15 ARM_GET_STATUS`、`0x16 ARM_RESET_ZERO`：保留命令编号，但统一返回 `ACK_UNKNOWN_CMD`。

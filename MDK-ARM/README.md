@@ -81,7 +81,7 @@
 - 文件：`Core/Inc/drive_bus_servo.h`、`Core/Src/drive_bus_servo.c`
 - 用途：总线舵机设备层控制。
 - 串口：`UART4`
-- 当前边界：提供位置发送、统一回调入口和预留反馈查询接口；抓取/放置流程由 `advance_arm` 非阻塞状态机实现，真实舵机位置回读协议仍待接入。
+- 当前边界：提供位置发送、统一回调入口和预留反馈查询接口；`advance_arm` 对夹爪命令发送成功后固定等待 500 ms，不查询实际舵机位置。
 - 典型接口：`BusServo_Init()`、`BusServo_SetPosition()`、`BusServo_SetPositionEx()`、`BusServo_SendGroup()`。
 
 ### 4.3 WIT IMU 传感器
@@ -213,13 +213,13 @@
 
 ## 9. 闭环、安全与通信保护
 
-TIM6 以 1 ms 周期仅置位调度标志；主循环由 `__WFI()` 唤醒后依次执行协议、电机通信、OPS/WIT、world 位姿、安全检查与 `AdvanceMotion_Poll()`。系统不再使用启动阶段的固定延时等待传感器，而是在 OPS 位姿有效后自动建立 world 原点。
+TIM6 以 1 ms 周期仅置位调度标志；主循环由 `__WFI()` 唤醒后依次执行协议、电机通信、OPS/WIT、world 位姿和 `AdvanceMotion_Poll()`。系统不再使用启动阶段的固定延时等待传感器，而是在 OPS 位姿有效后自动建立 world 原点。
 
 - `GotoPose` 在进入位置和角度容差时立即下发零速度，连续稳定 `ADVANCE_MOTION_ARRIVE_HOLD_MS` 后才进入 `ARRIVED`。
 - 急停、心跳超时、普通停止、取消目标和禁用底盘都会先取消活动的 `GotoPose`，避免状态机在下一周期重新输出速度。
 - RPM、麦轮、车体速度、世界速度和 `GotoPose` 使用互斥控制权；新运动命令会取消正在运行的目标点控制。
-- USART3 已使用 DMA 发送队列和 DMA/IDLE 接收。`drive_emm_Poll()` 会轮询四个底盘和最多两个机械臂步进轴的速度、位置、位置误差和状态位；机械臂使用实际位置闭环判定到位。
-- 机械臂采用人工置零：发送 `ARM_CONFIG` 前先人工将两步进轴置于零点；反馈有效后系统进入 `READY`。反馈超时、堵转、故障、停止或急停会使坐标失效，必须重新置零并配置。
+- USART3 已使用 DMA 发送队列和 DMA/IDLE 接收。`drive_emm_Poll()` 保留底盘驱动反馈轮询；机械臂高层流程不注册反馈、不以位置闭环判定到位。
+- 机械臂使用固定编译期参数：伸出、回收、下降和上升各等待 1000 ms，夹爪打开和闭合各等待 500 ms。每个轴动作只在命令发送前检查对应限位；`ARM_CONFIG`、`ARM_GET_STATUS` 和 `ARM_RESET_ZERO` 返回 `ACK_UNKNOWN_CMD`。
 - 驱动器心跳保护默认写为 `500 ms`，配置见 `drive_emm.h`。首次上板必须确认实际 Emm 固件支持该参数，且周期反馈查询会被驱动器视为有效心跳。
 - ACK 与状态数据使用 UART 中断发送队列；UART/DMA 回调仅负责接收、入队或释放发送槽位，不直接执行业务控制。
 

@@ -51,7 +51,6 @@
 #define APP_SCHEDULER_TICK_MS ((uint32_t)1U)
 #define APP_PROTOCOL_PERIOD_MS ((uint32_t)2U)
 #define APP_WORLD_PERIOD_MS ((uint32_t)10U)
-#define APP_SAFETY_PERIOD_MS ((uint32_t)10U)
 #define APP_MOTION_PERIOD_MS ((uint32_t)20U)
 #define APP_MOTOR_PERIOD_MS ((uint32_t)20U)
 #define APP_ORIGIN_PERIOD_MS ((uint32_t)1000U)
@@ -60,7 +59,6 @@
 /* TIM6 仅置位这些任务，不在中断上下文执行业务逻辑。 */
 #define APP_TASK_PROTOCOL ((uint32_t)0x00000001U)
 #define APP_TASK_WORLD ((uint32_t)0x00000002U)
-#define APP_TASK_SAFETY ((uint32_t)0x00000004U)
 #define APP_TASK_MOTION ((uint32_t)0x00000008U)
 #define APP_TASK_MOTOR ((uint32_t)0x00000010U)
 #define APP_TASK_ORIGIN ((uint32_t)0x00000020U)
@@ -140,19 +138,12 @@ static uint32_t App_TakePendingTasks(void)
 
 static void App_TryResetWorldOrigin(void)
 {
-  if (AdvanceWorld_GetPose()->origin_ready == 0U)
+  WorldPose2D_t pose = {0};
+
+  (void)AdvanceWorld_GetPoseCopy(&pose);
+  if (pose.origin_ready == 0U)
   {
     (void)AdvanceWorld_ResetOrigin();
-  }
-}
-
-static void App_SafetyCheck(void)
-{
-  if ((Chassis_IsMotionCommandActive() != 0U) &&
-      (drive_emm_IsChassisFeedbackHealthy() == 0U))
-  {
-    AdvanceMotion_CancelWithoutStop();
-    Chassis_Stop();
   }
 }
 
@@ -174,7 +165,6 @@ static void App_RunScheduledTasks(uint32_t pending)
   {
     drive_emm_Poll();
     BusServo_Poll();
-    AdvanceArm_Poll();
   }
 
   if ((pending & APP_TASK_ORIGIN) != 0U)
@@ -182,15 +172,9 @@ static void App_RunScheduledTasks(uint32_t pending)
     App_TryResetWorldOrigin();
   }
 
-  if ((pending & APP_TASK_SAFETY) != 0U)
-  {
-    App_SafetyCheck();
-  }
-
   if ((pending & APP_TASK_MOTION) != 0U)
   {
     AdvanceMotion_Poll();
-    AdvanceTest_NonBlockingPoll();
   }
 
   if ((pending & APP_TASK_LED) != 0U)
@@ -315,9 +299,8 @@ int main(void)
   }
   
   // 测试
-  /* 取消注释以依次执行阻塞测试和非阻塞测试。 */
+  /* 阻塞测试仅用于现场调试。 */
   AdvanceTest_BlockingMain();
-  // AdvanceTest_NonBlockingMain(); 
 
   /* USER CODE END 2 */
 
@@ -801,7 +784,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   static uint16_t protocol_tick = 0U;
   static uint16_t world_tick = 0U;
-  static uint16_t safety_tick = 0U;
   static uint16_t motion_tick = 0U;
   static uint16_t motor_tick = 0U;
   static uint16_t origin_tick = 0U;
@@ -821,11 +803,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   {
     world_tick = 0U;
     g_app_pending_tasks |= APP_TASK_WORLD;
-  }
-  if (++safety_tick >= (APP_SAFETY_PERIOD_MS / APP_SCHEDULER_TICK_MS))
-  {
-    safety_tick = 0U;
-    g_app_pending_tasks |= APP_TASK_SAFETY;
   }
   if (++motion_tick >= (APP_MOTION_PERIOD_MS / APP_SCHEDULER_TICK_MS))
   {
