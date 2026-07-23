@@ -11,6 +11,7 @@ extern "C"
 
 #define ADVANCE_MOTION_POSE_TIMEOUT_MS ((uint32_t)100U) /*!< 位姿数据超时时间，单位为 ms。 */
 #define ADVANCE_MOTION_YAW_TIMEOUT_MS ((uint32_t)100U) /*!< 航向角数据超时时间，单位为 ms。 */
+#define ADVANCE_MOTION_CONTROL_PERIOD_MS ((uint32_t)20U) /*!< 闭环控制周期，单位为 ms。 */
 #define ADVANCE_MOTION_ARRIVE_HOLD_MS ((uint32_t)150U) /*!< 到达判定保持时间，单位为 ms。 */
 #define ADVANCE_MOTION_KP_POS (1.0f) /*!< 位置误差比例增益。 */
 #define ADVANCE_MOTION_KP_YAW (2.0f) /*!< 航向角误差比例增益。 */

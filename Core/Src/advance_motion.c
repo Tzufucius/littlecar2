@@ -11,12 +11,17 @@ typedef struct
   uint32_t arrive_hold_start_tick;
   uint32_t pid_last_tick;
   uint32_t no_progress_start_tick;
+  uint32_t last_pose_updated_tick;
+  uint32_t last_yaw_updated_tick;
   float pid_integral_x_mm_s;
   float pid_integral_y_mm_s;
   float pid_integral_yaw_deg_s;
   float pid_last_x_mm;
   float pid_last_y_mm;
   float pid_last_yaw_deg;
+  float measured_vx_world_mm_s;
+  float measured_vy_world_mm_s;
+  float measured_wz_deg_s;
   float no_progress_reference_error_mm;
   uint8_t arrival_stop_sent;
   uint8_t pid_history_valid;
@@ -37,22 +42,72 @@ static void AdvanceMotion_ResetPidAndProgress(void)
 {
   g_motion_control.pid_last_tick = 0U;
   g_motion_control.no_progress_start_tick = 0U;
+  g_motion_control.last_pose_updated_tick = 0U;
+  g_motion_control.last_yaw_updated_tick = 0U;
   g_motion_control.pid_integral_x_mm_s = 0.0f;
   g_motion_control.pid_integral_y_mm_s = 0.0f;
   g_motion_control.pid_integral_yaw_deg_s = 0.0f;
   g_motion_control.pid_last_x_mm = 0.0f;
   g_motion_control.pid_last_y_mm = 0.0f;
   g_motion_control.pid_last_yaw_deg = 0.0f;
+  g_motion_control.measured_vx_world_mm_s = 0.0f;
+  g_motion_control.measured_vy_world_mm_s = 0.0f;
+  g_motion_control.measured_wz_deg_s = 0.0f;
   g_motion_control.no_progress_reference_error_mm = 0.0f;
   g_motion_control.pid_history_valid = 0U;
 }
 
-/* 记录当前位姿，作为下一周期的实测速度差分基准。 */
+/* 按传感器时间戳更新实测速度，并记录控制周期时间。 */
 static void AdvanceMotion_SavePidPose(const WorldPose2D_t *pose, uint32_t now_tick)
 {
-  g_motion_control.pid_last_x_mm = pose->x_mm;
-  g_motion_control.pid_last_y_mm = pose->y_mm;
-  g_motion_control.pid_last_yaw_deg = pose->yaw_deg;
+  if (g_motion_control.pid_history_valid == 0U)
+  {
+    g_motion_control.pid_last_x_mm = pose->x_mm;
+    g_motion_control.pid_last_y_mm = pose->y_mm;
+    g_motion_control.pid_last_yaw_deg = pose->yaw_deg;
+    g_motion_control.last_pose_updated_tick = pose->updated_tick;
+    g_motion_control.last_yaw_updated_tick = pose->yaw_updated_tick;
+    g_motion_control.measured_vx_world_mm_s = 0.0f;
+    g_motion_control.measured_vy_world_mm_s = 0.0f;
+    g_motion_control.measured_wz_deg_s = 0.0f;
+  }
+  else
+  {
+    if (pose->updated_tick != g_motion_control.last_pose_updated_tick)
+    {
+      uint32_t pose_dt_ms = pose->updated_tick - g_motion_control.last_pose_updated_tick;
+
+      if (pose_dt_ms > 0U)
+      {
+        float pose_dt_s = (float)pose_dt_ms / 1000.0f;
+
+        g_motion_control.measured_vx_world_mm_s =
+            (pose->x_mm - g_motion_control.pid_last_x_mm) / pose_dt_s;
+        g_motion_control.measured_vy_world_mm_s =
+            (pose->y_mm - g_motion_control.pid_last_y_mm) / pose_dt_s;
+      }
+      g_motion_control.pid_last_x_mm = pose->x_mm;
+      g_motion_control.pid_last_y_mm = pose->y_mm;
+      g_motion_control.last_pose_updated_tick = pose->updated_tick;
+    }
+
+    if (pose->yaw_updated_tick != g_motion_control.last_yaw_updated_tick)
+    {
+      uint32_t yaw_dt_ms = pose->yaw_updated_tick - g_motion_control.last_yaw_updated_tick;
+
+      if (yaw_dt_ms > 0U)
+      {
+        float yaw_dt_s = (float)yaw_dt_ms / 1000.0f;
+        float yaw_delta = AdvanceWorld_WrapAngleDeg(
+            pose->yaw_deg - g_motion_control.pid_last_yaw_deg);
+
+        g_motion_control.measured_wz_deg_s = yaw_delta / yaw_dt_s;
+      }
+      g_motion_control.pid_last_yaw_deg = pose->yaw_deg;
+      g_motion_control.last_yaw_updated_tick = pose->yaw_updated_tick;
+    }
+  }
+
   g_motion_control.pid_last_tick = now_tick;
   g_motion_control.pid_history_valid = 1U;
 }
@@ -301,6 +356,15 @@ AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, u
   g_motion.yaw_error_deg = 0.0f;
   g_motion_control.acc = acc;
   g_motion.state = ADVANCE_MOTION_STATE_RUNNING;
+  if (AdvanceMotion_GetFreshPose(&g_motion.pose) == ADVANCE_MOTION_STATUS_OK)
+  {
+    g_motion_control.pid_last_x_mm = g_motion.pose.x_mm;
+    g_motion_control.pid_last_y_mm = g_motion.pose.y_mm;
+    g_motion_control.pid_last_yaw_deg = g_motion.pose.yaw_deg;
+    g_motion_control.last_pose_updated_tick = g_motion.pose.updated_tick;
+    g_motion_control.last_yaw_updated_tick = g_motion.pose.yaw_updated_tick;
+    g_motion_control.pid_history_valid = 1U;
+  }
   return ADVANCE_MOTION_STATUS_OK;
 }
 
@@ -313,7 +377,7 @@ AdvanceMotion_RunState_t AdvanceMotion_GotoPoseBlocking(const WorldGoalPose2D_t 
   status = AdvanceMotion_GotoPoseEx(goal, acc);
   if (status != ADVANCE_MOTION_STATUS_OK)
   {
-    return g_motion.state;
+    return ADVANCE_MOTION_STATE_CANCELED;
   }
 
   last_control_tick = HAL_GetTick();
@@ -322,7 +386,7 @@ AdvanceMotion_RunState_t AdvanceMotion_GotoPoseBlocking(const WorldGoalPose2D_t 
     uint32_t now_tick = HAL_GetTick();
 
     drive_emm_Poll();
-    if ((now_tick - last_control_tick) >= 20U)
+    if ((now_tick - last_control_tick) >= ADVANCE_MOTION_CONTROL_PERIOD_MS)
     {
       last_control_tick = now_tick;
       AdvanceMotion_Poll();
@@ -344,9 +408,6 @@ void AdvanceMotion_Poll(void)
   float wz_ccw_deg_s = 0.0f;
   float vmax_mm_s;
   float wmax_deg_s;
-  float measured_vx_world_mm_s = 0.0f;
-  float measured_vy_world_mm_s = 0.0f;
-  float measured_wz_ccw_deg_s = 0.0f;
   float dt_s = 0.0f;
   float raw_linear_magnitude;
   float raw_wz_ccw_deg_s;
@@ -420,18 +481,16 @@ void AdvanceMotion_Poll(void)
       ((now_tick - g_motion_control.pid_last_tick) <= ADVANCE_MOTION_PID_MAX_DT_MS))
   {
     dt_s = (float)(now_tick - g_motion_control.pid_last_tick) / 1000.0f;
-    measured_vx_world_mm_s = (g_motion.pose.x_mm - g_motion_control.pid_last_x_mm) / dt_s;
-    measured_vy_world_mm_s = (g_motion.pose.y_mm - g_motion_control.pid_last_y_mm) / dt_s;
-    measured_wz_ccw_deg_s = AdvanceWorld_WrapAngleDeg(
-        g_motion.pose.yaw_deg - g_motion_control.pid_last_yaw_deg) / dt_s;
   }
+
+  AdvanceMotion_SavePidPose(&g_motion.pose, now_tick);
 
   vx_world_mm_s = (ADVANCE_MOTION_KP_POS * g_motion.error_x_mm) +
                   (ADVANCE_MOTION_KI_POS * g_motion_control.pid_integral_x_mm_s) -
-                  (ADVANCE_MOTION_KD_POS * measured_vx_world_mm_s);
+                  (ADVANCE_MOTION_KD_POS * g_motion_control.measured_vx_world_mm_s);
   vy_world_mm_s = (ADVANCE_MOTION_KP_POS * g_motion.error_y_mm) +
                   (ADVANCE_MOTION_KI_POS * g_motion_control.pid_integral_y_mm_s) -
-                  (ADVANCE_MOTION_KD_POS * measured_vy_world_mm_s);
+                  (ADVANCE_MOTION_KD_POS * g_motion_control.measured_vy_world_mm_s);
   vmax_mm_s = AdvanceMotion_GetGoalVmax(&g_motion.goal);
   raw_linear_magnitude = sqrtf((vx_world_mm_s * vx_world_mm_s) +
                                 (vy_world_mm_s * vy_world_mm_s));
@@ -443,7 +502,7 @@ void AdvanceMotion_Poll(void)
     wmax_deg_s = AdvanceMotion_GetGoalWmax(&g_motion.goal);
     raw_wz_ccw_deg_s = (ADVANCE_MOTION_KP_YAW * g_motion.yaw_error_deg) +
                         (ADVANCE_MOTION_KI_YAW * g_motion_control.pid_integral_yaw_deg_s) -
-                        (ADVANCE_MOTION_KD_YAW * measured_wz_ccw_deg_s);
+                        (ADVANCE_MOTION_KD_YAW * g_motion_control.measured_wz_deg_s);
     wz_ccw_deg_s = AdvanceWorld_LimitFloat(
         raw_wz_ccw_deg_s,
         -wmax_deg_s,
@@ -453,7 +512,6 @@ void AdvanceMotion_Poll(void)
 
   AdvanceMotion_UpdatePidIntegral(vx_world_mm_s, vy_world_mm_s, wz_ccw_deg_s, dt_s,
                                    linear_saturated, yaw_saturated, yaw_required);
-  AdvanceMotion_SavePidPose(&g_motion.pose, now_tick);
   command_magnitude = sqrtf((vx_world_mm_s * vx_world_mm_s) +
                              (vy_world_mm_s * vy_world_mm_s));
   if (AdvanceMotion_HasNoProgress(now_tick, command_magnitude) != 0U)
