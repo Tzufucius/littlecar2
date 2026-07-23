@@ -277,38 +277,44 @@ static void AdvanceMotion_SetTerminalState(AdvanceMotion_RunState_t state, uint8
   AdvanceMotion_ResetPidAndProgress();
 }
 
-static AdvanceMotion_Status_t AdvanceMotion_ApplyWorldVelocityEx(float vx_world_mm_s, float vy_world_mm_s, float wz_ccw_deg_s, uint8_t acc)
+static AdvanceMotion_Status_t AdvanceMotion_ApplyWorldVelocityEx(float vx_world_mm_s, float vy_world_mm_s, float wz_ccw_deg_s, uint8_t acc, const WorldPose2D_t *pose)
 {
-  WorldPose2D_t pose;
+  WorldPose2D_t current_pose;
   float vx_body_mm_s;
   float vy_body_mm_s;
-  AdvanceMotion_Status_t pose_status = AdvanceMotion_GetFreshPose(&pose);
+  AdvanceMotion_Status_t pose_status;
 
-  if (pose_status == ADVANCE_MOTION_STATUS_NO_ORIGIN)
+  if (pose == NULL)
   {
-    Chassis_SmoothStop(acc);
-    return ADVANCE_MOTION_STATUS_NO_ORIGIN;
+    pose_status = AdvanceMotion_GetFreshPose(&current_pose);
+    if (pose_status == ADVANCE_MOTION_STATUS_NO_ORIGIN)
+    {
+      Chassis_SmoothStop(acc);
+      return ADVANCE_MOTION_STATUS_NO_ORIGIN;
+    }
+
+    if (pose_status == ADVANCE_MOTION_STATUS_NO_POSE)
+    {
+      Chassis_SmoothStop(acc);
+      return ADVANCE_MOTION_STATUS_NO_POSE;
+    }
+
+    if (pose_status == ADVANCE_MOTION_STATUS_POSE_TIMEOUT)
+    {
+      Chassis_SmoothStop(acc);
+      return ADVANCE_MOTION_STATUS_POSE_TIMEOUT;
+    }
+
+    if (pose_status != ADVANCE_MOTION_STATUS_OK)
+    {
+      Chassis_SmoothStop(acc);
+      return pose_status;
+    }
+
+    pose = &current_pose;
   }
 
-  if (pose_status == ADVANCE_MOTION_STATUS_NO_POSE)
-  {
-    Chassis_SmoothStop(acc);
-    return ADVANCE_MOTION_STATUS_NO_POSE;
-  }
-
-  if (pose_status == ADVANCE_MOTION_STATUS_POSE_TIMEOUT)
-  {
-    Chassis_SmoothStop(acc);
-    return ADVANCE_MOTION_STATUS_POSE_TIMEOUT;
-  }
-
-  if (pose_status != ADVANCE_MOTION_STATUS_OK)
-  {
-    Chassis_SmoothStop(acc);
-    return pose_status;
-  }
-
-  AdvanceWorld_WorldToBodyVelocity(vx_world_mm_s, vy_world_mm_s, pose.yaw_deg, &vx_body_mm_s, &vy_body_mm_s);
+  AdvanceWorld_WorldToBodyVelocity(vx_world_mm_s, vy_world_mm_s, pose->yaw_deg, &vx_body_mm_s, &vy_body_mm_s);
   Chassis_SetBodyVelocityEx(vx_body_mm_s, vy_body_mm_s, wz_ccw_deg_s, acc);
   return ADVANCE_MOTION_STATUS_OK;
 }
@@ -333,18 +339,28 @@ AdvanceMotion_Status_t AdvanceMotion_SetWorldVelocityEx(float vx_world_mm_s, flo
     AdvanceMotion_ResetPidAndProgress();
   }
 
-  return AdvanceMotion_ApplyWorldVelocityEx(vx_world_mm_s, vy_world_mm_s, wz_ccw_deg_s, acc);
+  return AdvanceMotion_ApplyWorldVelocityEx(vx_world_mm_s, vy_world_mm_s, wz_ccw_deg_s, acc, NULL);
 }
 
 /* 设置目标位姿并启动闭环到点运动任务。 */
 AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, uint8_t acc)
 {
+  WorldPose2D_t pose;
+  AdvanceMotion_Status_t pose_status;
+
   if (AdvanceMotion_IsGoalValid(goal) == 0U)
   {
     return ADVANCE_MOTION_STATUS_INVALID_PARAM;
   }
 
+  pose_status = AdvanceMotion_GetFreshPose(&pose);
+  if (pose_status != ADVANCE_MOTION_STATUS_OK)
+  {
+    return pose_status;
+  }
+
   g_motion.goal = *goal;
+  g_motion.pose = pose;
   g_motion.started_tick = HAL_GetTick();
   g_motion.updated_tick = g_motion.started_tick;
   g_motion_control.arrive_hold_start_tick = 0U;
@@ -356,15 +372,7 @@ AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, u
   g_motion.yaw_error_deg = 0.0f;
   g_motion_control.acc = acc;
   g_motion.state = ADVANCE_MOTION_STATE_RUNNING;
-  if (AdvanceMotion_GetFreshPose(&g_motion.pose) == ADVANCE_MOTION_STATUS_OK)
-  {
-    g_motion_control.pid_last_x_mm = g_motion.pose.x_mm;
-    g_motion_control.pid_last_y_mm = g_motion.pose.y_mm;
-    g_motion_control.pid_last_yaw_deg = g_motion.pose.yaw_deg;
-    g_motion_control.last_pose_updated_tick = g_motion.pose.updated_tick;
-    g_motion_control.last_yaw_updated_tick = g_motion.pose.yaw_updated_tick;
-    g_motion_control.pid_history_valid = 1U;
-  }
+  AdvanceMotion_SavePidPose(&g_motion.pose, g_motion.started_tick);
   return ADVANCE_MOTION_STATUS_OK;
 }
 
@@ -520,7 +528,7 @@ void AdvanceMotion_Poll(void)
     return;
   }
 
-  (void)AdvanceMotion_ApplyWorldVelocityEx(vx_world_mm_s, vy_world_mm_s, wz_ccw_deg_s, g_motion_control.acc);
+  (void)AdvanceMotion_ApplyWorldVelocityEx(vx_world_mm_s, vy_world_mm_s, wz_ccw_deg_s, g_motion_control.acc, &g_motion.pose);
   g_motion.updated_tick = now_tick;
 }
 
