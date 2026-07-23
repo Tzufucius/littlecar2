@@ -4,6 +4,7 @@
 #include "drive_emm.h"
 #include "sensor_limit.h"
 
+/* 单个步进轴动作只做限位预检查、发相对位置命令与固定等待。 */
 static AdvanceArm_Status_t AdvanceArm_MoveStep(uint8_t motor_id,
                                                 uint8_t direction,
                                                 uint16_t speed,
@@ -21,6 +22,7 @@ static AdvanceArm_Status_t AdvanceArm_MoveStep(uint8_t motor_id,
   return ADVANCE_ARM_STATUS_OK;
 }
 
+/* 伸缩轴向前伸出。 */
 static AdvanceArm_Status_t AdvanceArm_Extend(void)
 {
   return AdvanceArm_MoveStep(ARM_SWING_MOTOR_ID,
@@ -31,6 +33,7 @@ static AdvanceArm_Status_t AdvanceArm_Extend(void)
                              SENSOR_LIMIT_SLIDE_FRONT);
 }
 
+/* 伸缩轴向后回收。 */
 static AdvanceArm_Status_t AdvanceArm_Retract(void)
 {
   return AdvanceArm_MoveStep(ARM_SWING_MOTOR_ID,
@@ -41,6 +44,7 @@ static AdvanceArm_Status_t AdvanceArm_Retract(void)
                              SENSOR_LIMIT_SLIDE_REAR);
 }
 
+/* 升降轴下降。 */
 static AdvanceArm_Status_t AdvanceArm_Lower(void)
 {
   return AdvanceArm_MoveStep(ARM_LIFT_MOTOR_ID,
@@ -51,6 +55,7 @@ static AdvanceArm_Status_t AdvanceArm_Lower(void)
                              SENSOR_LIMIT_LIFT_DOWN);
 }
 
+/* 升降轴上升。 */
 static AdvanceArm_Status_t AdvanceArm_Raise(void)
 {
   return AdvanceArm_MoveStep(ARM_LIFT_MOTOR_ID,

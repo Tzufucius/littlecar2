@@ -41,11 +41,43 @@ typedef enum
   ADVANCE_ARM_STATUS_SERVO_ERROR
 } AdvanceArm_Status_t;
 
+/**
+ * @brief 初始化机械臂高层模块。
+ * @note 阻塞式方案不维护高层运行状态，此函数保留以兼容统一初始化流程。
+ */
 void AdvanceArm_Init(void);
+
+/**
+ * @brief 控制夹爪打开或闭合。
+ * @param closed true 为闭合，false 为打开。
+ * @return 发送失败时返回 ADVANCE_ARM_STATUS_SERVO_ERROR。
+ * @note 命令发送成功后阻塞等待 500 ms。
+ */
 AdvanceArm_Status_t AdvanceArm_Grab(bool closed);
+
+/**
+ * @brief 按固定顺序执行抓取动作。
+ * @return 限位阻塞或夹爪发送失败时停止机械臂并返回对应状态。
+ * @note 函数阻塞约 4.5 秒，期间主循环不能处理新的上位机命令。
+ */
 AdvanceArm_Status_t AdvanceArm_Pick(void);
+
+/**
+ * @brief 按固定顺序执行放置动作。
+ * @return 限位阻塞或夹爪发送失败时停止机械臂并返回对应状态。
+ * @note 函数阻塞约 4.5 秒，期间主循环不能处理新的上位机命令。
+ */
 AdvanceArm_Status_t AdvanceArm_Place(void);
+
+/**
+ * @brief 立即停止升降轴与伸缩轴。
+ */
 void AdvanceArm_Stop(void);
+
+/**
+ * @brief 执行机械臂紧急停止。
+ * @note 当前实现与 AdvanceArm_Stop 等价，不维护额外急停状态。
+ */
 void AdvanceArm_EStop(void);
 
 #ifdef __cplusplus
