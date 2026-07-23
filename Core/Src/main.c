@@ -175,7 +175,6 @@ static void App_RunScheduledTasks(uint32_t pending)
   if ((pending & APP_TASK_MOTION) != 0U)
   {
     AdvanceMotion_Poll();
-    AdvanceTest_NonBlockingPoll();
   }
 
   if ((pending & APP_TASK_LED) != 0U)
@@ -300,9 +299,8 @@ int main(void)
   }
   
   // 测试
-  /* 取消注释以依次执行阻塞测试和非阻塞测试。 */
+  /* 阻塞测试仅用于现场调试。 */
   AdvanceTest_BlockingMain();
-  // AdvanceTest_NonBlockingMain(); 
 
   /* USER CODE END 2 */
 
