@@ -11,6 +11,7 @@ extern "C"
 
 #define ADVANCE_MOTION_POSE_TIMEOUT_MS ((uint32_t)100U) /*!< 位姿数据超时时间，单位为 ms。 */
 #define ADVANCE_MOTION_YAW_TIMEOUT_MS ((uint32_t)100U) /*!< 航向角数据超时时间，单位为 ms。 */
+#define ADVANCE_MOTION_CONTROL_PERIOD_MS ((uint32_t)20U) /*!< 闭环控制周期，单位为 ms。 */
 #define ADVANCE_MOTION_ARRIVE_HOLD_MS ((uint32_t)150U) /*!< 到达判定保持时间，单位为 ms。 */
 #define ADVANCE_MOTION_KP_POS (1.0f) /*!< 位置误差比例增益。 */
 #define ADVANCE_MOTION_KP_YAW (2.0f) /*!< 航向角误差比例增益。 */
@@ -83,6 +84,13 @@ extern "C"
   AdvanceMotion_Status_t AdvanceMotion_SetWorldVelocityEx(float vx_world_mm_s, float vy_world_mm_s, float wz_ccw_deg_s, uint8_t acc);
   /** @brief 启动带加速度参数的位姿导航。 @param goal 目标位姿指针。 @return 启动结果状态。 */
   AdvanceMotion_Status_t AdvanceMotion_GotoPoseEx(const WorldGoalPose2D_t *goal, uint8_t acc);
+  /**
+   * @brief 阻塞执行位姿导航，返回前不会继续执行调用方后续代码。
+   * @details UART/DMA 中断在阻塞期间仍可运行，但本函数不处理上位机协议队列。
+   * 外部通信控制应使用异步 AdvanceMotion_GotoPoseEx 和主循环调度；本接口用于本地测试和固定业务流程。
+   * @return 最终 AdvanceMotion_RunState_t，不得从中断上下文调用。
+   */
+  AdvanceMotion_RunState_t AdvanceMotion_GotoPoseBlocking(const WorldGoalPose2D_t *goal, uint8_t acc);
   /** @brief 轮询推进位姿导航控制器。 */
   void AdvanceMotion_Poll(void);
   /** @brief 仅在存在活动目标时取消并平滑停车，避免空闲状态产生多余停止帧。 */

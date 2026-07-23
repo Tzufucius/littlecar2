@@ -15,12 +15,12 @@
 - `comm_protocol.h`：上位机二进制协议解析、来源回包与控制权租约接口。
 - `advance_chassis.h`：麦克纳姆底盘高级运动接口。
 - `advance_world.h`：全局坐标系、world 位姿和坐标变换接口。
-- `advance_arm.h`：机械臂阻塞式高层接口，提供夹爪、固定抓取/放置和停止控制。
+- `advance_arm.h`：完全开环的阻塞式机械臂接口，提供夹爪、固定抓取/放置和停止控制。
 - `advance_test.h`：下位机人工联调接口，仅提供阻塞式测试。
 
 `CMDSET_SERVO (0x04)` 的机械臂扩展命令：
 
-- `0x10 ARM_GRAB`：1 字节 Payload，`0` 打开夹爪，`1` 闭合夹爪。
-- `0x12 ARM_PICK`、`0x13 ARM_PLACE`：零 Payload，同步执行固定取放流程。
+- `0x10 ARM_GRAB`：1 字节 Payload，`0` 打开夹爪，`1` 闭合夹爪；固定阻塞 1000 ms。
+- `0x12 ARM_PICK`、`0x13 ARM_PLACE`：零 Payload，同步执行固定 5 秒取放流程。
 - `0x14 ARM_ABORT`：停止两步进轴。
 - `0x11 ARM_CONFIG`、`0x15 ARM_GET_STATUS`、`0x16 ARM_RESET_ZERO`：保留命令编号，但统一返回 `ACK_UNKNOWN_CMD`。

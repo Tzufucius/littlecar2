@@ -30,7 +30,6 @@
 #include "advance_motion.h"
 #include "advance_world.h"
 #include "advance_arm.h"
-#include "advance_test.h"
 #include "comm_host.h"
 #include "comm_protocol.h"
 #include "car_pose.h"
@@ -51,7 +50,7 @@
 #define APP_SCHEDULER_TICK_MS ((uint32_t)1U)
 #define APP_PROTOCOL_PERIOD_MS ((uint32_t)2U)
 #define APP_WORLD_PERIOD_MS ((uint32_t)10U)
-#define APP_MOTION_PERIOD_MS ((uint32_t)20U)
+#define APP_MOTION_PERIOD_MS ADVANCE_MOTION_CONTROL_PERIOD_MS
 #define APP_MOTOR_PERIOD_MS ((uint32_t)20U)
 #define APP_ORIGIN_PERIOD_MS ((uint32_t)1000U)
 #define APP_LED_PERIOD_MS ((uint32_t)500U)
@@ -298,10 +297,6 @@ int main(void)
     HAL_Delay(100);
   }
   
-  // 测试
-  /* 阻塞测试仅用于现场调试。 */
-  AdvanceTest_BlockingMain();
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
