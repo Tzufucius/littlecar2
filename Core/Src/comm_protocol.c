@@ -3,7 +3,6 @@
 #include "advance_motion.h"
 #include "advance_world.h"
 #include "advance_arm.h"
-#include "drive_bus_servo.h"
 #include <stdbool.h>
 #include <string.h>
 
@@ -69,18 +68,6 @@
 #define HOST_PROTOCOL_PAYLOAD_LEN_CHASSIS_RPM ((uint8_t)9U)
 #define HOST_PROTOCOL_PAYLOAD_LEN_CHASSIS_VELOCITY ((uint8_t)7U)
 #define HOST_PROTOCOL_PAYLOAD_LEN_GOTO_POSE ((uint8_t)22U)
-#define HOST_PROTOCOL_PAYLOAD_LEN_ARM_CONFIG ((uint8_t)13U)
-#define HOST_PROTOCOL_PAYLOAD_LEN_ARM_GRAB_LEGACY ((uint8_t)14U)
-#define HOST_PROTOCOL_PAYLOAD_LEN_ARM_PLAN_LEGACY ((uint8_t)36U)
-
-#define HOST_PROTOCOL_ARM_STATE_BOOT ((uint8_t)0U)
-#define HOST_PROTOCOL_ARM_STATE_READY ((uint8_t)1U)
-#define HOST_PROTOCOL_ARM_STATE_PICK_EXTEND ((uint8_t)2U)
-#define HOST_PROTOCOL_ARM_STATE_PLACE_EXTEND ((uint8_t)7U)
-#define HOST_PROTOCOL_ARM_STATE_COMPLETE ((uint8_t)12U)
-#define HOST_PROTOCOL_ARM_STATE_FAULT ((uint8_t)13U)
-#define HOST_PROTOCOL_ARM_STATE_ESTOP ((uint8_t)14U)
-
 typedef enum
 {
   /* 上位机发给 STM32 的控制命令。 */
@@ -191,6 +178,22 @@ static void HostProtocol_StopMotion(uint8_t immediate)
   else
   {
     Chassis_SmoothStop(CHASSIS_DEFAULT_ACC);
+  }
+}
+
+/* 阻塞机械臂动作前先撤销闭环目标并停止底盘。 */
+static void HostProtocol_PrepareArmAction(void)
+{
+  AdvanceMotion_CancelWithoutStop();
+  Chassis_Stop();
+}
+
+/* 仅当前控制者可续期其心跳租约。 */
+static void HostProtocol_RefreshOwnerHeartbeat(HostSource_t source)
+{
+  if ((HostControlOwner_t)(source + 1U) == g_control_owner)
+  {
+    g_owner_heartbeat_tick = HAL_GetTick();
   }
 }
 
@@ -628,73 +631,6 @@ static void HostProtocol_SendMotionStatusData(const HostProtocol_Frame_t *frame)
   HostProtocol_SendData(frame, payload, (uint8_t)sizeof(payload));
 }
 
-static uint8_t HostProtocol_GetLegacyArmTaskState(const AdvanceArm_RuntimeStatus_t *status)
-{
-  if (status->run_state == ADVANCE_ARM_RUN_BOOT)
-  {
-    return HOST_PROTOCOL_ARM_STATE_BOOT;
-  }
-  if (status->run_state == ADVANCE_ARM_RUN_READY)
-  {
-    return HOST_PROTOCOL_ARM_STATE_READY;
-  }
-  if (status->run_state == ADVANCE_ARM_RUN_COMPLETE)
-  {
-    return HOST_PROTOCOL_ARM_STATE_COMPLETE;
-  }
-  if (status->run_state == ADVANCE_ARM_RUN_FAULT)
-  {
-    return HOST_PROTOCOL_ARM_STATE_FAULT;
-  }
-  if (status->run_state == ADVANCE_ARM_RUN_ESTOP)
-  {
-    return HOST_PROTOCOL_ARM_STATE_ESTOP;
-  }
-  if (status->task_type == ADVANCE_ARM_TASK_PICK)
-  {
-    return (uint8_t)(HOST_PROTOCOL_ARM_STATE_PICK_EXTEND +
-                     ((status->step > 4U) ? 4U : status->step));
-  }
-  return (uint8_t)(HOST_PROTOCOL_ARM_STATE_PLACE_EXTEND +
-                   ((status->step > 4U) ? 4U : status->step));
-}
-
-static void HostProtocol_SendArmStatusData(const HostProtocol_Frame_t *frame)
-{
-  AdvanceArm_RuntimeStatus_t status;
-  uint8_t payload[25] = {0};
-
-  if (AdvanceArm_GetStatus(&status) != ADVANCE_ARM_STATUS_OK)
-  {
-    return;
-  }
-  payload[0] = HostProtocol_GetLegacyArmTaskState(&status);
-  payload[1] = (uint8_t)status.lift_position_validity;
-  payload[2] = (uint8_t)status.swing_position_validity;
-  payload[3] = (status.run_state == ADVANCE_ARM_RUN_RUNNING) ? 1U : 0U;
-  payload[4] = (status.run_state == ADVANCE_ARM_RUN_FAULT) ? 1U : 0U;
-  HostProtocol_WriteI32(&payload[5], status.lift_current_pulse);
-  HostProtocol_WriteI32(&payload[9], status.lift_target_pulse);
-  HostProtocol_WriteI32(&payload[13], status.swing_current_pulse);
-  HostProtocol_WriteI32(&payload[17], status.swing_target_pulse);
-  HostProtocol_WriteU32(&payload[21], status.updated_tick);
-  HostProtocol_SendData(frame, payload, (uint8_t)sizeof(payload));
-}
-
-static void HostProtocol_ReadArmPlan(const uint8_t *payload, AdvanceArm_TaskPlan_t *plan)
-{
-  plan->swing_extend_pulse = HostProtocol_ReadU32(&payload[0]);
-  plan->lift_lower_pulse = HostProtocol_ReadU32(&payload[4]);
-  plan->lift_raise_pulse = HostProtocol_ReadU32(&payload[8]);
-  plan->swing_retract_pulse = HostProtocol_ReadU32(&payload[12]);
-  plan->gripper_close_position = HostProtocol_ReadI32(&payload[16]);
-  plan->gripper_release_position = HostProtocol_ReadI32(&payload[20]);
-  plan->gripper_acceleration = HostProtocol_ReadU16(&payload[24]);
-  plan->gripper_speed = HostProtocol_ReadU16(&payload[26]);
-  plan->servo_wait_ms = HostProtocol_ReadU32(&payload[28]);
-  plan->task_timeout_ms = HostProtocol_ReadU32(&payload[32]);
-}
-
 /* SYSTEM 命令只维护通信状态，不直接控制外设。 */
 static HostProtocol_AckResult_t HostProtocol_HandleSystem(const HostProtocol_Frame_t *frame)
 {
@@ -1044,11 +980,12 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
 static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Frame_t *frame)
 {
   AdvanceArm_Status_t arm_status;
-  AdvanceArm_Config_t config;
-  AdvanceArm_TaskPlan_t plan;
 
   g_arm_ack_detail = 0U;
-  if ((frame->cmd_id != HOST_PROTOCOL_CMD_ARM_GET_STATUS) &&
+  if (((frame->cmd_id == HOST_PROTOCOL_CMD_ARM_GRAB) ||
+       (frame->cmd_id == HOST_PROTOCOL_CMD_ARM_PICK) ||
+       (frame->cmd_id == HOST_PROTOCOL_CMD_ARM_PLACE) ||
+       (frame->cmd_id == HOST_PROTOCOL_CMD_ARM_ABORT)) &&
       (HostProtocol_IsControlAllowed(frame->source) == 0U))
   {
     return ACK_DENIED;
@@ -1057,8 +994,7 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
   switch (frame->cmd_id)
   {
   case HOST_PROTOCOL_CMD_ARM_GRAB:
-    if ((frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_FLAG) &&
-        (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_ARM_GRAB_LEGACY))
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_FLAG)
     {
       return ACK_BAD_LENGTH;
     }
@@ -1066,85 +1002,45 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
     {
       return ACK_BAD_PARAM;
     }
-    arm_status = (frame->payload_len == HOST_PROTOCOL_PAYLOAD_LEN_FLAG)
-                     ? AdvanceArm_Grab(frame->payload[0] != 0U)
-                     : ((BusServo_SetPositionEx(frame->payload[1],
-                                                HostProtocol_ReadU16(&frame->payload[10]),
-                                                (frame->payload[0] != 0U)
-                                                    ? HostProtocol_ReadI32(&frame->payload[6])
-                                                    : HostProtocol_ReadI32(&frame->payload[2]),
-                                                HostProtocol_ReadU16(&frame->payload[12])) == drive_bus_servo_STATUS_OK)
-                            ? ADVANCE_ARM_STATUS_OK
-                            : ADVANCE_ARM_STATUS_FAULT);
+    HostProtocol_PrepareArmAction();
+    HostProtocol_RefreshOwnerHeartbeat(frame->source);
+    /* ACK 在阻塞动作结束后发送，主机超时必须覆盖完整动作时间。 */
+    arm_status = AdvanceArm_Grab(frame->payload[0] != 0U);
+    HostProtocol_RefreshOwnerHeartbeat(frame->source);
     g_arm_ack_detail = (uint8_t)arm_status;
     return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ACK_FAULT;
 
   case HOST_PROTOCOL_CMD_ARM_CONFIG:
-    /* 兼容旧客户端：仅接受与编译期固定配置完全一致的参数。 */
-    if ((frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_ARM_CONFIG) ||
-        (frame->payload[3] > 1U) || (frame->payload[4] > 1U))
-    {
-      return ACK_BAD_LENGTH;
-    }
-    config.lift_motor_id = frame->payload[0];
-    config.swing_motor_id = frame->payload[1];
-    config.gripper_servo_id = frame->payload[2];
-    config.lift_down_direction = (AdvanceArm_MotorDirection_t)frame->payload[3];
-    config.swing_extend_direction = (AdvanceArm_MotorDirection_t)frame->payload[4];
-    config.lift_velocity = HostProtocol_ReadU16(&frame->payload[5]);
-    config.swing_velocity = HostProtocol_ReadU16(&frame->payload[7]);
-    config.lift_acceleration = frame->payload[9];
-    config.swing_acceleration = frame->payload[10];
-    config.position_tolerance_pulse = HostProtocol_ReadI16(&frame->payload[11]);
-    arm_status = AdvanceArm_IsFixedConfig(&config) ? AdvanceArm_ResetZero()
-                                                   : ADVANCE_ARM_STATUS_INVALID_PARAM;
-    g_arm_ack_detail = (uint8_t)arm_status;
-    return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ACK_DENIED;
+    /* 动态配置、运行状态和软件零点协议已移除。 */
+    return ACK_UNKNOWN_CMD;
 
   case HOST_PROTOCOL_CMD_ARM_PICK:
   case HOST_PROTOCOL_CMD_ARM_PLACE:
-    if ((frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE) &&
-        (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_ARM_PLAN_LEGACY))
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE)
     {
       return ACK_BAD_LENGTH;
     }
-    if (frame->payload_len == HOST_PROTOCOL_PAYLOAD_LEN_NONE)
-    {
-      arm_status = (frame->cmd_id == HOST_PROTOCOL_CMD_ARM_PICK)
-                       ? AdvanceArm_StartPick()
-                       : AdvanceArm_StartPlace();
-    }
-    else
-    {
-      HostProtocol_ReadArmPlan(frame->payload, &plan);
-      arm_status = AdvanceArm_StartLegacyTask(
-          (frame->cmd_id == HOST_PROTOCOL_CMD_ARM_PICK)
-              ? ADVANCE_ARM_TASK_PICK
-              : ADVANCE_ARM_TASK_PLACE,
-          &plan);
-    }
+    HostProtocol_PrepareArmAction();
+    HostProtocol_RefreshOwnerHeartbeat(frame->source);
+    /* ACK 在阻塞动作结束后发送，主机超时必须覆盖完整动作时间。 */
+    arm_status = (frame->cmd_id == HOST_PROTOCOL_CMD_ARM_PICK)
+                     ? AdvanceArm_Pick()
+                     : AdvanceArm_Place();
+    HostProtocol_RefreshOwnerHeartbeat(frame->source);
     g_arm_ack_detail = (uint8_t)arm_status;
-    return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ((arm_status == ADVANCE_ARM_STATUS_INVALID_PARAM) ? ACK_BAD_PARAM : ACK_DENIED);
+    return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ACK_FAULT;
 
   case HOST_PROTOCOL_CMD_ARM_ABORT:
     if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE)
     {
       return ACK_BAD_LENGTH;
     }
-    AdvanceArm_Abort();
+    AdvanceArm_Stop();
     return ACK_OK;
 
   case HOST_PROTOCOL_CMD_ARM_GET_STATUS:
-    return (frame->payload_len == HOST_PROTOCOL_PAYLOAD_LEN_NONE) ? ACK_OK : ACK_BAD_LENGTH;
-
   case HOST_PROTOCOL_CMD_ARM_RESET_ZERO:
-    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE)
-    {
-      return ACK_BAD_LENGTH;
-    }
-    arm_status = AdvanceArm_ResetZero();
-    g_arm_ack_detail = (uint8_t)arm_status;
-    return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ACK_DENIED;
+    return ACK_UNKNOWN_CMD;
 
   default:
     return ACK_UNKNOWN_CMD;
@@ -1306,12 +1202,6 @@ void HostProtocol_Poll(void)
         (frame.cmd_id == HOST_PROTOCOL_CMD_CHASSIS_GET_MOTION_STATUS))
     {
       HostProtocol_SendMotionStatusData(&frame);
-    }
-    if ((result == ACK_OK) && (frame.msg_type == MSG_CMD) &&
-        (frame.cmd_set == CMDSET_SERVO) &&
-        (frame.cmd_id == HOST_PROTOCOL_CMD_ARM_GET_STATUS))
-    {
-      HostProtocol_SendArmStatusData(&frame);
     }
   }
 }
