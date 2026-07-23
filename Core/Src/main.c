@@ -30,7 +30,6 @@
 #include "advance_motion.h"
 #include "advance_world.h"
 #include "advance_arm.h"
-#include "advance_test.h"
 #include "comm_host.h"
 #include "comm_protocol.h"
 #include "car_pose.h"
@@ -298,10 +297,6 @@ int main(void)
     HAL_Delay(100);
   }
   
-  // 测试
-  /* 阻塞测试仅用于现场调试。 */
-  AdvanceTest_BlockingMain();
-
   /* USER CODE END 2 */
 
   /* Infinite loop */

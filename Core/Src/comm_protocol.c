@@ -165,8 +165,6 @@ static HostControlOwner_t g_control_owner = HOST_CONTROL_OWNER_NONE;
 static uint32_t g_owner_heartbeat_tick = 0U;
 static uint8_t g_safety_latched = 0U;
 static HostProtocol_TxQueue_t g_tx_queue = {0};
-/* 机械臂命令失败时写入 ACK detail，供上位机区分未置零、忙碌和故障。 */
-static uint8_t g_arm_ack_detail = 0U;
 
 static void HostProtocol_StopMotion(uint8_t immediate)
 {
@@ -979,9 +977,6 @@ static HostProtocol_AckResult_t HostProtocol_HandleChassis(const HostProtocol_Fr
 /* SERVO 命令调用 advance_arm，避免通信层直接操作总线舵机协议。 */
 static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Frame_t *frame)
 {
-  AdvanceArm_Status_t arm_status;
-
-  g_arm_ack_detail = 0U;
   if (((frame->cmd_id == HOST_PROTOCOL_CMD_ARM_GRAB) ||
        (frame->cmd_id == HOST_PROTOCOL_CMD_ARM_PICK) ||
        (frame->cmd_id == HOST_PROTOCOL_CMD_ARM_PLACE) ||
@@ -1004,17 +999,27 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
     }
     HostProtocol_PrepareArmAction();
     HostProtocol_RefreshOwnerHeartbeat(frame->source);
-    /* ACK 在阻塞动作结束后发送，主机超时必须覆盖完整动作时间。 */
-    arm_status = AdvanceArm_Grab(frame->payload[0] != 0U);
+    /* ACK_OK 仅表示阻塞函数返回，不表示机械臂实际到位。 */
+    AdvanceArm_Grab(frame->payload[0] != 0U);
     HostProtocol_RefreshOwnerHeartbeat(frame->source);
-    g_arm_ack_detail = (uint8_t)arm_status;
-    return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ACK_FAULT;
+    return ACK_OK;
 
   case HOST_PROTOCOL_CMD_ARM_CONFIG:
     /* 动态配置、运行状态和软件零点协议已移除。 */
     return ACK_UNKNOWN_CMD;
 
   case HOST_PROTOCOL_CMD_ARM_PICK:
+    if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE)
+    {
+      return ACK_BAD_LENGTH;
+    }
+    HostProtocol_PrepareArmAction();
+    HostProtocol_RefreshOwnerHeartbeat(frame->source);
+    /* ACK_OK 仅表示阻塞函数返回，不表示机械臂实际到位。 */
+    AdvanceArm_Pick();
+    HostProtocol_RefreshOwnerHeartbeat(frame->source);
+    return ACK_OK;
+
   case HOST_PROTOCOL_CMD_ARM_PLACE:
     if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE)
     {
@@ -1022,13 +1027,10 @@ static HostProtocol_AckResult_t HostProtocol_HandleServo(const HostProtocol_Fram
     }
     HostProtocol_PrepareArmAction();
     HostProtocol_RefreshOwnerHeartbeat(frame->source);
-    /* ACK 在阻塞动作结束后发送，主机超时必须覆盖完整动作时间。 */
-    arm_status = (frame->cmd_id == HOST_PROTOCOL_CMD_ARM_PICK)
-                     ? AdvanceArm_Pick()
-                     : AdvanceArm_Place();
+    /* ACK_OK 仅表示阻塞函数返回，不表示机械臂实际到位。 */
+    AdvanceArm_Place();
     HostProtocol_RefreshOwnerHeartbeat(frame->source);
-    g_arm_ack_detail = (uint8_t)arm_status;
-    return (arm_status == ADVANCE_ARM_STATUS_OK) ? ACK_OK : ACK_FAULT;
+    return ACK_OK;
 
   case HOST_PROTOCOL_CMD_ARM_ABORT:
     if (frame->payload_len != HOST_PROTOCOL_PAYLOAD_LEN_NONE)
@@ -1194,8 +1196,7 @@ void HostProtocol_Poll(void)
   while (HostProtocol_DequeueFrame(&frame) != 0U)
   {
     result = HostProtocol_HandleCommand(&frame);
-    HostProtocol_SendAck(&frame, result,
-                         (frame.cmd_set == CMDSET_SERVO) ? g_arm_ack_detail : 0U);
+    HostProtocol_SendAck(&frame, result, 0U);
     if ((result == ACK_OK) &&
         (frame.msg_type == MSG_CMD) &&
         (frame.cmd_set == CMDSET_CHASSIS) &&
