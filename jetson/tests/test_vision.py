@@ -56,6 +56,12 @@ class VisionTest(unittest.TestCase):
 
         self.assertIsNone(detect_qr(frame))
 
+    def test_qr_returns_task_code(self):
+        image_path = ROOT / "assets" / "二维码" / "145+634+312+132.png"
+        image = read_image(image_path)
+
+        self.assertEqual(detect_qr(image), "145+634+312+132")
+
     def test_yolo_validates_arguments_without_loading_model(self):
         frame = np.zeros((10, 10, 3), dtype=np.uint8)
 

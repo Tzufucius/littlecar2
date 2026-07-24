@@ -6,7 +6,7 @@
 
 - `marker.py`：`detect_numbered_marker(frame_bgr)`，识别带数字的同心圆标记，返回中心、数字、数字角度、置信度、圈数和缩放因子。
 - `materials.py`：`detect_colored_materials(frame_bgr)`，使用 Hough 圆检测和 HSV 分类识别彩色物料，最多返回三个结果。
-- `qr.py`：`detect_qr(frame_bgr)`，识别二维码并返回内容、角点、中心和时间戳，不进行变化过滤。
+- `qr.py`：`detect_qr(frame_bgr)`，识别二维码并直接返回任务码字符串；未识别到时返回 `None`。
 - `yolo.py`：`load_yolo_model(model_path)` 和 `detect_yolo(...)`，保留 YOLO 能力但不自动加载或调用模型。
 
 数字模板在模块内部只初始化一次；除第三方检测器实例外不维护长期状态。传统方法是当前默认视觉方案，YOLO 需要由调用方显式加载。
