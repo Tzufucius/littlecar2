@@ -1,7 +1,6 @@
 import os
 import matplotlib.pyplot as plt
 import numpy as np
-import matplotlib.patches as patches
 
 # ==========================================
 # 全局参数与常量定义 (阴影范围已缩小至 0.6)
@@ -225,7 +224,9 @@ def draw_3d_material(ax, cx, cy, S, phi, X_c, Y_c):
 # 单个图像渲染与保存逻辑
 # ==========================================
 def render_single_image(n_empty, save_path, S, phi, X_c, Y_c):
-    fig, ax = plt.subplots(figsize=(6, 6))
+    # 【修正 1】：使用满版无框坐标系机制，100 DPI 下 figsize=(6,6) 严格等于 600x600 像素
+    fig = plt.figure(figsize=(CANVAS_SIZE / 100, CANVAS_SIZE / 100), dpi=100)
+    ax = fig.add_axes([0, 0, 1, 1])  # 铺满整个画布，不预留边框
     ax.set_aspect('equal')
     ax.axis('off')
 
@@ -285,8 +286,9 @@ def render_single_image(n_empty, save_path, S, phi, X_c, Y_c):
     ax.set_xlim(0, CANVAS_SIZE)
     ax.set_ylim(CANVAS_SIZE, 0)
     
-    # 强制保存为 JPEG 格式，防止出现白边
-    plt.savefig(save_path, format='jpg', dpi=150, bbox_inches='tight', pad_inches=0)
+    # 【修正 2】：不使用 bbox_inches='tight'，避免 Matplotlib 自适应裁剪、平移坐标系
+    # 强制在 100 DPI 下保存为标准的 600x600 的 JPEG 图片，保证绝对 1:1 坐标映射
+    plt.savefig(save_path, format='jpg', dpi=100)
     plt.close(fig)
 
 
@@ -329,18 +331,18 @@ def batch_generate(num_images=12, output_dir=r"assets\物料盘"):
             X_c = np.random.uniform(min_pos, max_pos)
             Y_c = np.random.uniform(min_pos, max_pos)
         
-        # 四舍五入取整，用于文件名命名
-        X_c_int = int(round(X_c))
-        Y_c_int = int(round(Y_c))
+        # 【修正 3】：计算局部 CAD 坐标原点 (0, 0) 在经过刚性平移和纸张物理扭曲后的真实视觉中心像素
+        X_true, Y_true = transform(0, 0, S, phi, X_c, Y_c, CANVAS_SIZE)
+        X_true_int = int(round(X_true))
+        Y_true_int = int(round(Y_true))
         
-        # 按照格式命名：(84, 225).jpg
-        file_name = f"({X_c_int}, {Y_c_int}).jpg"
+        # 按照真实形心格式命名，如：(84, 225).jpg
+        file_name = f"({X_true_int}, {Y_true_int}).jpg"
         save_path = os.path.join(output_dir, file_name)
         
         # 执行单张渲染
         render_single_image(n_empty, save_path, S, phi, X_c, Y_c)
         
-        material_count = 3 - n_empty
         print(f"[{i+1}/{num_images}] 已保存 -> {file_name} (缩放: {S:.2f}, 旋转: {phi_deg:.1f}°, 空位: {n_empty})")
 
     print("-" * 65)
@@ -352,4 +354,4 @@ def batch_generate(num_images=12, output_dir=r"assets\物料盘"):
 # ==========================================
 if __name__ == '__main__':
     # 计划生成 16 张图，保存路径设为 assets\物料盘
-    batch_generate(num_images=16, output_dir=r"assets\物料盘")
+    batch_generate(num_images=30, output_dir=r"assets\物料盘")
